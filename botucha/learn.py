@@ -47,7 +47,7 @@ def should_learn(*, now: float, last_msg_ts: float, new_msgs: int, reply_pending
     return not reply_pending and new_msgs >= min_new and now - last_msg_ts >= idle_s
 
 
-def _resolve(about: str | None, store: Store) -> int | None:
+def resolve_member(about: str | None, store: Store) -> int | None:
     if not about:
         return None
     a = str(about).lower().lstrip("@")
@@ -72,7 +72,7 @@ async def learn_once(memory: Memory, llm: LLM, chat_id: int, *, source: str = "a
         return 0
     n = 0
     for about, fact in ext.facts:
-        await memory.upsert_fact("fact", fact, _resolve(about, memory.store), source)
+        await memory.upsert_fact("fact", fact, resolve_member(about, memory.store), source)
         n += 1
     for word, meaning in ext.slang:
         await memory.upsert_fact("slang", f"{word.lower()} = {meaning}", None, source)
