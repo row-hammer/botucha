@@ -1,0 +1,14 @@
+[Unit]
+Description=Botucha Telegram bot
+After=network-online.target ollama.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Projects/botucha
+ExecStart=%h/.local/share/mise/installs/uv/latest/.mise-bins/uv run python -m botucha --config config.toml
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target
