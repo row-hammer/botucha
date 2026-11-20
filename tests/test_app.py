@@ -50,7 +50,8 @@ def make_cfg(tmp_path, export=None):
     paths = dataclasses.replace(cfg.paths, persona=tmp_path / "persona.md",
                                 style_examples=tmp_path / "style.txt", export=export)
     trig = dataclasses.replace(cfg.trigger, burst_quiet_s=0.01, burst_max_s=0.05)
-    return dataclasses.replace(cfg, paths=paths, trigger=trig)
+    tele = dataclasses.replace(cfg.telegram, chat_ids=(C,))
+    return dataclasses.replace(cfg, paths=paths, trigger=trig, telegram=tele)
 
 
 @pytest.fixture

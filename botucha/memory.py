@@ -1,6 +1,7 @@
 """Chat memory: conversation chunks, facts, slang and member profiles over SQLite."""
 from __future__ import annotations
 
+import asyncio
 import re
 import time
 from collections.abc import Callable
@@ -55,9 +56,14 @@ class Memory:
         self.db = store.conn
         self.embedder = embedder
         self.clock = clock
+        self._index_lock = asyncio.Lock()
 
     # ---- chunks ---------------------------------------------------------
     async def index_new_chunks(self, chat_id: int, *, force: bool = False) -> int:
+        async with self._index_lock:  # reply worker, learning and bootstrap may call this concurrently
+            return await self._index_new_chunks(chat_id, force)
+
+    async def _index_new_chunks(self, chat_id: int, force: bool) -> int:
         key = f"chunk_cursor:{chat_id}"
         cursor = int(self.store.get_state(key, "0"))
         rows = self.store.messages_after(chat_id, cursor)
@@ -186,9 +192,10 @@ class Memory:
     def profiles(self) -> dict[int, str]:
         return {r[0]: r[1] for r in self.db.execute("SELECT user_id, text FROM profiles")}
 
-    async def search_chunks(self, query: str, k: int = 3) -> list[ChunkHit]:
+    async def search_chunks(self, query: str, k: int = 3, chat_id: int | None = None) -> list[ChunkHit]:
         out = []
-        for cid, score in await self._hybrid("chunks", query, k):
+        where, args = ("WHERE chat_id=?", (chat_id,)) if chat_id is not None else ("", ())
+        for cid, score in await self._hybrid("chunks", query, k, where, args):
             r = self.db.execute("SELECT chat_id, first_msg_id, last_msg_id, start_ts, end_ts, text "
                                 "FROM chunks WHERE id=?", (cid,)).fetchone()
             out.append(ChunkHit(Chunk(*r), score))

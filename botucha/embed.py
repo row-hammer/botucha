@@ -19,7 +19,7 @@ def normalize(v: np.ndarray) -> np.ndarray:
 
 class OllamaEmbedder:
     def __init__(self, host: str, model: str = "bge-m3"):
-        self.client = ollama.AsyncClient(host=host)
+        self.client = ollama.AsyncClient(host=host, timeout=120)
         self.model = model
 
     async def embed(self, texts: list[str]) -> np.ndarray:

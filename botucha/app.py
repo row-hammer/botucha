@@ -26,6 +26,8 @@ log = logging.getLogger(__name__)
 CANNED = "servas perkaito, palauk"
 HISTORY_N = 40
 BOT_NAME = "Botucha"
+COMMAND_FAILED = "nepavyko, pabandyk veliau"
+TG_LIMIT = 4000
 
 
 @dataclass
@@ -75,6 +77,7 @@ class Botucha:
         self.state = load_trigger_state(store, cfg.trigger)
         self.last_error: str | None = None
         self._ignored_chats: set[int] = set()
+        self._bg_lock = asyncio.Lock()  # bootstrap and learning never overlap
         self.worker = ReplyWorker(self.run_job, quiet_s=cfg.trigger.burst_quiet_s,
                                   max_wait_s=cfg.trigger.burst_max_s)
 
@@ -98,6 +101,8 @@ class Botucha:
 
         if m.text.startswith("/") and not own:
             parsed = parse_command(m.text, self.bot_username)
+            if parsed and m.ts < self.started_at:
+                return  # sent while offline: stored, never executed or answered (spec §4)
             if parsed:
                 name, args = parsed
                 if name in ("rimtai", "atsimeni") and m.ts >= self.started_at and self.state.enabled:
@@ -106,9 +111,20 @@ class Botucha:
                     return
                 ctx = CommandContext(self.memory, self.store, self.state, self.cfg, self.started_at,
                                      self.last_error, m.chat_id)
-                reply = await handle_command(name, args, m.user_id, now, ctx)
+                try:
+                    reply = await handle_command(name, args, m.user_id, now, ctx)
+                except Exception as e:
+                    log.exception("command /%s failed", name)
+                    self.last_error = f"/{name}: {type(e).__name__}: {e}"
+                    reply = COMMAND_FAILED
                 if reply:
-                    await self.outbox.send(m.chat_id, [reply], m.msg_id)
+                    if len(reply) > TG_LIMIT:
+                        reply = reply[:TG_LIMIT - 1] + "…"
+                    try:
+                        await self.outbox.send(m.chat_id, [reply], m.msg_id)
+                    except Exception as e:
+                        log.warning("command reply failed: %s", e)
+                        self.last_error = f"send: {e}"
                 return
 
         direct = is_direct(m.text, reply_to_bot=m.reply_to_bot, mentions_bot=m.mentions_bot,
@@ -152,7 +168,7 @@ class Botucha:
             history = self.store.recent_messages(chat_id, HISTORY_N)
             ids = {j.msg_id for j in jobs}
             query = "\n".join(m.text for m in history if m.msg_id in ids) or (history[-1].text if history else "")
-            hits = await self.memory.search_chunks(query, k=6 if recall else 3)
+            hits = await self.memory.search_chunks(query, k=6 if recall else 3, chat_id=chat_id)
             facts = await self.memory.search_facts(query, k=5)
             members = self.store.members()
             ctx = PromptContext(
@@ -174,7 +190,7 @@ class Botucha:
                 await self._send(chat_id, [CANNED], direct[-1].msg_id, store=False)
             return
         if links and hits:
-            texts = texts + [" ".join(message_link(chat_id, h.chunk.first_msg_id) for h in hits[:3])]
+            texts = texts + [" ".join(message_link(h.chunk.chat_id, h.chunk.first_msg_id) for h in hits[:3])]
         await self._send(chat_id, texts, direct[-1].msg_id if direct else None, store=True)
 
     async def _send(self, chat_id: int, texts: list[str], reply_to: int | None, *, store: bool) -> None:
@@ -195,6 +211,14 @@ class Botucha:
 
     # ---- background ------------------------------------------------------
     async def learn_tick(self) -> None:
+        async with self._bg_lock:
+            try:
+                await self._learn_tick()
+            except Exception as e:
+                log.exception("learning failed")
+                self.last_error = f"learn: {e}"
+
+    async def _learn_tick(self) -> None:
         for chat_id in self.cfg.telegram.chat_ids:
             last = self.store.recent_messages(chat_id, 1)
             if not last:
@@ -204,15 +228,11 @@ class Botucha:
             if not should_learn(now=self.clock(), last_msg_ts=last[0].ts, new_msgs=new,
                                 reply_pending=self.worker.pending):
                 continue
-            try:
-                await self.memory.index_new_chunks(chat_id, force=True)
-                await learn_once(self.memory, self.llm, chat_id)
-                self.store.set_state(key, str(self.store.last_rowid(chat_id)))
-                if profiles_due(self.store, chat_id):
-                    await refresh_profiles(self.memory, self.llm, self.store, chat_id)
-            except Exception as e:
-                log.exception("learning failed")
-                self.last_error = f"learn: {e}"
+            await self.memory.index_new_chunks(chat_id, force=True)
+            await learn_once(self.memory, self.llm, chat_id)
+            self.store.set_state(key, str(self.store.last_rowid(chat_id)))
+            if profiles_due(self.store, chat_id):
+                await refresh_profiles(self.memory, self.llm, self.store, chat_id)
 
     async def learn_loop(self, every_s: float = 60.0) -> None:
         while True:
@@ -220,6 +240,10 @@ class Botucha:
             await self.learn_tick()
 
     async def bootstrap(self) -> None:
+        async with self._bg_lock:
+            await self._bootstrap()
+
+    async def _bootstrap(self) -> None:
         export = self.cfg.paths.export
         if not export or self.store.get_state("export_imported") == "1":
             return

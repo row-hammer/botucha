@@ -12,10 +12,11 @@ Everything runs on this PC through Ollama.
    only sees messages that mention it, so it can't learn or react to keywords. (If the bot was already in a
    group, remove it and add it again after changing this.)
 3. **Token:** `cp .env.example .env` and put the token from BotFather in it. Never commit `.env`.
-4. **Config:** `config.toml` already exists (copied from `config.example.toml`). Check:
-   - `chat_ids`: the real group is `-1001234567890`. To add a test group, start the bot, write anything in
+4. **Config:** `config.toml` already exists on this PC with the real values (`cp config.example.toml config.toml` on a fresh checkout; it is git-ignored). Check:
+   - `chat_ids`: the Bot API ID of each group (a supergroup ID is `-100` followed by the `id` in the export's
+     `result.json`). To add a test group, start the bot, write anything in
      the test group, and copy the ID from the log line `ignoring chat -100…`.
-   - `admin_id`: your Telegram user ID (`100000001`, taken from the export).
+   - `admin_id`: your Telegram user ID (the digits of your `from_id` in the export).
    - `chat_model`: the Ollama model. Default `gemma4-31b-heretic-q4-32k`.
 5. **Models:** `ollama pull bge-m3` (memory search; already done on this PC).
 6. **Memory from the export:** happens automatically on first start. To do it ahead of time (takes ~3 min):

@@ -5,7 +5,7 @@
 # Bot API chat IDs the bot works in (test group + "draugų grupė"). Everything else is ignored.
 chat_ids = [-1001234567890]
 # Your Telegram user ID (admin commands). Not your @username.
-admin_id = 100000001
+admin_id = 123456789
 # Text that counts as calling him by name (case-insensitive regex).
 bot_name_regex = "botuch\\w*"
 
@@ -34,4 +34,4 @@ db = "botucha.db"
 persona = "persona.md"
 style_examples = "style_examples.txt"
 # Telegram Desktop export loaded once on first start. Remove the line to skip.
-export = "/path/to/ChatExport/result.json"
+# export = "/path/to/ChatExport/result.json"
