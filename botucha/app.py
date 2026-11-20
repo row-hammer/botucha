@@ -74,12 +74,16 @@ class Botucha:
         self.started_at = started_at if started_at is not None else clock()
         self.state = load_trigger_state(store, cfg.trigger)
         self.last_error: str | None = None
+        self._ignored_chats: set[int] = set()
         self.worker = ReplyWorker(self.run_job, quiet_s=cfg.trigger.burst_quiet_s,
                                   max_wait_s=cfg.trigger.burst_max_s)
 
     # ---- incoming --------------------------------------------------------
     async def on_message(self, m: Incoming) -> None:
         if m.chat_id not in self.cfg.telegram.chat_ids:
+            if m.chat_id not in self._ignored_chats:
+                self._ignored_chats.add(m.chat_id)
+                log.info("ignoring chat %d (add it to telegram.chat_ids in config.toml to enable)", m.chat_id)
             return
         if m.edited:
             self.store.update_message_text(m.chat_id, m.msg_id, m.text)

@@ -178,3 +178,12 @@ async def test_atsimeni_sends_links(app):
     await bot.on_message(inc("/atsimeni kai shortinom vwce", msg_id=200))
     await settle()
     assert out.sent[-1][1].startswith("https://t.me/c/1234567890/")
+
+
+async def test_foreign_chat_logged_once(app, caplog):
+    bot, *_ = await app()
+    caplog.set_level("INFO", logger="botucha.app")
+    await bot.on_message(inc("x", chat=-42))
+    await bot.on_message(inc("y", chat=-42, msg_id=2))
+    hits = [r for r in caplog.records if "-42" in r.getMessage()]
+    assert len(hits) == 1
