@@ -55,6 +55,7 @@ is offline.
 | everyone | `/ka_zinai [@vardas]` | what he knows about someone (with fact numbers) |
 | everyone | `/atsimeni <ko ieskot>` | find an old conversation, with links |
 | everyone | `/rimtai <klausimas>` or "rimtai" in a message to him | a straight answer |
+| everyone | `/kaina <tickeris>` | current price from Yahoo, e.g. `/kaina nvda`, `/kaina btc`, `/kaina $ASML` (no model, instant) |
 | everyone | `/tyla [min]` | no uninvited replies for N minutes (default 60) |
 | everyone | reply to his message with `/pataisyk <geresnis atsakymas>` | store how he should have answered (fine-tuning data) |
 | everyone | reply to his message with `/gerai` or `/blogai [kodel]` | rate a reply (also 👍❤️🔥🤣😁💯 good, 👎💩🤮😴🥱 bad as reactions; reactions need him to be a group admin) |
@@ -67,6 +68,13 @@ is offline.
 He always answers when mentioned, replied to, or called "botucha"; sometimes on keywords (spx, vwce,
 akcijos, kripto, btc, leverage, short, parduot, nvidia, coreweave) or at random; at most one uninvited
 reply or reaction per 3 minutes.
+
+## Market prices
+
+When he replies and the conversation mentions a known name (spx, nasdaq, vwce, nvidia, coreweave, broadcom,
+btc, eth, eurusd) or any `$TICKER`, he fetches up to 3 live prices from Yahoo Finance (cached 5 min) and uses
+only those numbers. Without price data he is told not to name prices. Only the ticker is sent to Yahoo.
+Add names under `[prices] aliases` in `config.toml`; turn it off with `enabled = false`.
 
 ## Changing him
 

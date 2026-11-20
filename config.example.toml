@@ -43,3 +43,9 @@ style_examples = "style_examples.txt"
 # [memory]
 # User IDs whose memory you keep by hand: no automatic facts, no profile refresh.
 # locked_members = [123456789]
+
+[prices]
+# Live prices from Yahoo Finance when a known name or $TICKER comes up (only the ticker is sent).
+enabled = true
+# Extra names: lowercase stem = Yahoo symbol (stems of 4+ letters match word beginnings).
+# aliases = { "tesl" = "TSLA", "asml" = "ASML" }

@@ -16,6 +16,7 @@ from .config import load_config
 from .embed import OllamaEmbedder
 from .llm import OllamaLLM
 from .memory import Memory
+from .prices import PriceClient
 from .store import Store
 
 log = logging.getLogger("botucha")
@@ -87,7 +88,7 @@ async def main(config_path: Path) -> None:
     me = await tg.get_me()
     log.info("logged in as @%s (%d)", me.username, me.id)
     app = Botucha(cfg, store, memory, OllamaLLM(cfg.model), AiogramOutbox(tg), rng=random.Random(),
-                  bot_user_id=me.id, bot_username=me.username or "")
+                  bot_user_id=me.id, bot_username=me.username or "", prices=PriceClient())
     dp = Dispatcher()
 
     @dp.message()

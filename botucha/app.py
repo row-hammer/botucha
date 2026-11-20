@@ -16,6 +16,7 @@ from .commands import CommandContext, handle_command, load_trigger_state, messag
 from .config import Config
 from .export_import import import_export, parse_export
 from .feedback import score_for_reactions
+from .prices import DEFAULT_ALIASES, PriceClient, detect_symbols, format_quote
 from .learn import learn_once, profiles_due, refresh_profiles, should_learn
 from .llm import LLM
 from .memory import Memory
@@ -72,7 +73,7 @@ class Botucha:
     def __init__(self, cfg: Config, store: Store, memory: Memory, llm: LLM, outbox: Outbox, *,
                  rng: random.Random, clock: Callable[[], float] = time.time, bot_user_id: int,
                  bot_username: str, sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
-                 started_at: float | None = None):
+                 started_at: float | None = None, prices: PriceClient | None = None):
         self.cfg, self.store, self.memory, self.llm, self.outbox = cfg, store, memory, llm, outbox
         self.rng, self.clock, self.sleep = rng, clock, sleep
         self.bot_user_id, self.bot_username = bot_user_id, bot_username
@@ -81,6 +82,8 @@ class Botucha:
         self.last_error: str | None = None
         self._ignored_chats: set[int] = set()
         self._locked = frozenset(cfg.memory.locked_members)
+        self.prices = prices if cfg.prices.enabled else None
+        self.aliases = {**DEFAULT_ALIASES, **dict(cfg.prices.aliases)}
         self._calls: dict[int, deque[float]] = defaultdict(deque)
         self._bg_lock = asyncio.Lock()  # bootstrap and learning never overlap
         self.worker = ReplyWorker(self.run_job, quiet_s=cfg.trigger.burst_quiet_s,
@@ -119,6 +122,9 @@ class Botucha:
                 if name in ("rimtai", "atsimeni") and m.ts >= self.started_at and self.state.enabled:
                     self.worker.submit(ReplyJob(m.chat_id, m.msg_id, direct=True, serious=name == "rimtai",
                                                 recall=name == "atsimeni", links=name == "atsimeni"))
+                    return
+                if name == "kaina":
+                    await self._command_price(m, args)
                     return
                 if name in ("gerai", "blogai", "pataisyk"):
                     await self._command_feedback(m, name, args)
@@ -187,6 +193,17 @@ class Botucha:
             reply = "ačiū, užrašiau"
         await self.outbox.send(m.chat_id, [reply], m.msg_id)
 
+    async def _command_price(self, m: Incoming, args: str) -> None:
+        if not args:
+            reply = "naudok: /kaina <tickeris arba pavadinimas>, pvz. /kaina nvda"
+        elif self.prices is None:
+            reply = "kainos išjungtos"
+        else:
+            symbols = detect_symbols(args, self.aliases) or [args.split()[0].lstrip("$").upper()]
+            quotes = await self.prices.quotes(symbols)
+            reply = "\n".join(format_quote(q) for q in quotes) if quotes else f"nerandu tokio tickerio: {args}"
+        await self.outbox.send(m.chat_id, [reply], m.msg_id)
+
     async def on_reaction(self, chat_id: int, msg_id: int, user_id: int | None, emojis: list[str]) -> None:
         """A member changed their reaction on a message. Only reactions on Botucha's messages count."""
         if chat_id not in self.cfg.telegram.chat_ids or user_id is None or not self._is_own(chat_id, msg_id):
@@ -238,6 +255,8 @@ class Botucha:
                 slang=[f.text for f in self.memory.slang_in([m.text for m in history])],
                 chunks=[h.chunk.text for h in hits], facts=[f.text for f in facts], history=history,
                 bot_user_id=self.bot_user_id, serious=any(j.serious for j in jobs))
+            if self.prices:
+                ctx.prices = [format_quote(q) for q in await self.prices.quotes(detect_symbols(query, self.aliases))]
             await self.outbox.typing(chat_id)
             texts = await generate_reply(self.llm, ctx, num_predict=self.cfg.model.num_predict,
                                          max_chars=self.cfg.model.num_ctx * 3, member_names=self._member_names())

@@ -58,12 +58,19 @@ class MemoryCfg:
 
 
 @dataclass(frozen=True)
+class PricesCfg:
+    enabled: bool = True
+    aliases: tuple[tuple[str, str], ...] = ()  # extra/overriding stem -> Yahoo symbol
+
+
+@dataclass(frozen=True)
 class Config:
     telegram: TelegramCfg
     model: ModelCfg
     trigger: TriggerCfg
     paths: PathsCfg
     memory: MemoryCfg = MemoryCfg()
+    prices: PricesCfg = PricesCfg()
 
 
 def load_config(path: Path, env: Mapping[str, str]) -> Config:
@@ -94,6 +101,8 @@ def load_config(path: Path, env: Mapping[str, str]) -> Config:
             paths=PathsCfg(base / p["db"], base / p["persona"], base / p["style_examples"],
                            Path(export) if export else None),
             memory=MemoryCfg(tuple(int(u) for u in raw.get("memory", {}).get("locked_members", []))),
+            prices=PricesCfg(bool(raw.get("prices", {}).get("enabled", True)),
+                             tuple((str(k).lower(), str(v)) for k, v in raw.get("prices", {}).get("aliases", {}).items())),
         )
     except KeyError as e:
         raise ConfigError(f"missing config key: {e}") from e
