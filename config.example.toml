@@ -1,0 +1,37 @@
+# Copy to config.toml and fill in chat_ids and admin_id.
+# The bot token goes in .env as BOTUCHA_TOKEN, never here.
+
+[telegram]
+# Bot API chat IDs the bot works in (test group + "draugų grupė"). Everything else is ignored.
+chat_ids = [-1001234567890]
+# Your Telegram user ID (admin commands). Not your @username.
+admin_id = 100000001
+# Text that counts as calling him by name (case-insensitive regex).
+bot_name_regex = "botuch\\w*"
+
+[model]
+chat_model = "gemma4-31b-heretic-q4-32k"
+embed_model = "bge-m3"
+num_ctx = 32768
+num_predict = 150
+keep_alive = "30m"
+ollama_host = "http://localhost:11434"
+
+[trigger]
+# Word prefixes, case-insensitive, diacritics ignored.
+keywords = ["spx", "vwce", "akcij", "krypt", "btc", "leverage", "short", "parduot", "nvidia", "coreweave"]
+keyword_prob = 0.5
+random_n = 25
+cooldown_s = 180
+reaction_n = 15
+reactions = ["🤡", "🗿", "💊", "🤣", "😈", "🥴", "💩", "🖕"]
+burst_quiet_s = 5
+burst_max_s = 20
+tyla_default_min = 60
+
+[paths]
+db = "botucha.db"
+persona = "persona.md"
+style_examples = "style_examples.txt"
+# Telegram Desktop export loaded once on first start. Remove the line to skip.
+export = "/path/to/ChatExport/result.json"
