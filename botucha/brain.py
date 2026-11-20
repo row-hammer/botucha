@@ -76,19 +76,24 @@ def build_prompt(ctx: PromptContext, *, max_chars: int) -> list[dict]:
 
 
 _MD = re.compile(r"[*_`]")
+ROLE_LABELS = {"assistant", "bot", "user", "system", "ai", "eval"}
+
+
+def _squash(s: str) -> str:
+    return re.sub(r"\W", "", s.lower())
 
 
 def clean_reply(raw: str, member_names: list[str], max_lines: int = MAX_LINES) -> list[str]:
-    names = {n.lower() for n in member_names if n}
+    names = {_squash(n) for n in member_names if n}
     out: list[str] = []
     for line in raw.splitlines():
         line = _MD.sub("", line).strip()
         line = re.sub(r"^[-•]\s+", "", line)
-        m = re.match(r"^([^:\s]{1,32}):\s*(.*)$", line)
+        m = re.match(r"^([^:]{1,32}?):\s*(.*)$", line)
         if m:
-            who = m.group(1).lower()
-            if who in names:
-                continue  # model wrote as a real member
+            who = _squash(m.group(1))
+            if who in ROLE_LABELS or any(who and n.startswith(who) for n in names):
+                continue  # model wrote as a real member or leaked a chat-format label
             if who.startswith("botuch"):
                 line = m.group(2)
         line = line.strip().strip('"„“”\'').strip()

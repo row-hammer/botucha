@@ -90,3 +90,12 @@ async def test_serious_uses_bigger_budget():
     llm = FakeLLM(["a\nb\nc\nd\ne"])
     out = await generate_reply(llm, ctx(serious=True), num_predict=150, max_chars=10_000, member_names=[])
     assert len(out) == 5 and llm.calls[0]["num_predict"] >= 400
+
+
+def test_clean_drops_mangled_member_and_role_labels():
+    raw = "De genier: xdd\nAssistant: labas\nBOT: nu\nhodlinam"
+    assert clean_reply(raw, ["Tadas", "mantas"]) == ["hodlinam"]
+
+
+def test_clean_keeps_normal_colon_text():
+    assert clean_reply("taip: 3x leverage", ["Tadas"]) == ["taip: 3x leverage"]
