@@ -5,6 +5,7 @@ import json
 import logging
 from dataclasses import dataclass
 
+from .guard import MAX_FACT_CHARS, MAX_SLANG_CHARS, looks_like_instruction
 from .llm import LLM
 from .memory import Memory
 from .store import Store
@@ -73,12 +74,17 @@ async def learn_once(memory: Memory, llm: LLM, chat_id: int, *, source: str = "a
         return 0
     n = 0
     for about, fact in ext.facts:
+        if len(fact) > MAX_FACT_CHARS or looks_like_instruction(fact):
+            log.warning("learning: skipped instruction-like fact: %.80s", fact)
+            continue
         uid = resolve_member(about, memory.store)
         if uid in locked:
             continue  # owner keeps this member's memory by hand
         await memory.upsert_fact("fact", fact, uid, source)
         n += 1
     for word, meaning in ext.slang:
+        if len(word) + len(meaning) > MAX_SLANG_CHARS or looks_like_instruction(f"{word} {meaning}"):
+            continue
         await memory.upsert_fact("slang", f"{word.lower()} = {meaning}", None, source)
         n += 1
     memory.store.set_state(key, str(new[-1][0]))

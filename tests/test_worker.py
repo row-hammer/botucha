@@ -38,15 +38,26 @@ async def test_burst_merged(setup):
     assert [len(b) for b in batches] == [3]
 
 
-async def test_waits_for_quiet(setup):
-    w, batches, _ = setup
+async def test_waits_for_quiet():
+    # Own worker with wide windows: GC pauses of tens of ms in a long test run must not look like "quiet".
+    batches = []
+
+    async def run_job(jobs):
+        batches.append(jobs)
+
+    w = ReplyWorker(run_job, quiet_s=0.3, max_wait_s=2.0)
+    task = asyncio.create_task(w.run())
+    loop = asyncio.get_running_loop()
+    start = loop.time()
     w.submit(job(1))
-    for _ in range(6):  # 120 ms of activity
+    while loop.time() - start < 0.8:  # chat keeps going for 0.8 s
         await asyncio.sleep(0.02)
         w.activity()
-        assert batches == []
-    await asyncio.sleep(0.2)
+    assert batches == []
+    await asyncio.sleep(0.5)
     assert len(batches) == 1
+    await w.stop()
+    task.cancel()
 
 
 async def test_max_wait_caps_delay(setup):

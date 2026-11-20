@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections import defaultdict, deque
 import random
 import time
 from collections.abc import Awaitable, Callable
@@ -56,6 +57,7 @@ class Outbox(Protocol):
     async def send(self, chat_id: int, texts: list[str], reply_to: int | None) -> list[int]: ...
     async def react(self, chat_id: int, msg_id: int, emoji: str) -> None: ...
     async def typing(self, chat_id: int) -> None: ...
+    async def leave(self, chat_id: int) -> None: ...
 
 
 def _read(path) -> str:
@@ -79,6 +81,7 @@ class Botucha:
         self.last_error: str | None = None
         self._ignored_chats: set[int] = set()
         self._locked = frozenset(cfg.memory.locked_members)
+        self._calls: dict[int, deque[float]] = defaultdict(deque)
         self._bg_lock = asyncio.Lock()  # bootstrap and learning never overlap
         self.worker = ReplyWorker(self.run_job, quiet_s=cfg.trigger.burst_quiet_s,
                                   max_wait_s=cfg.trigger.burst_max_s)
@@ -89,6 +92,12 @@ class Botucha:
             if m.chat_id not in self._ignored_chats:
                 self._ignored_chats.add(m.chat_id)
                 log.info("ignoring chat %d (add it to telegram.chat_ids in config.toml to enable)", m.chat_id)
+                if m.chat_id < 0:  # a group nobody configured: leave it
+                    try:
+                        await self.outbox.leave(m.chat_id)
+                        log.info("left unknown chat %d", m.chat_id)
+                    except Exception as e:
+                        log.warning("could not leave chat %d: %s", m.chat_id, e)
             return
         if m.edited:
             self.store.update_message_text(m.chat_id, m.msg_id, m.text)
@@ -137,6 +146,14 @@ class Botucha:
             name_regex=self.cfg.telegram.bot_name_regex)
         decision = decide(m.text, sender_is_bot=own, direct=direct, started_at=self.started_at, msg_ts=m.ts,
                           now=now, state=self.state, cfg=self.cfg.trigger, rng=self.rng)
+        if decision is Decision.REPLY and direct and self._over_limit(m.user_id, now):
+            calls = self._calls[m.user_id]
+            if len(calls) == self.cfg.trigger.user_calls_per_min + 1:  # react once per flood
+                try:
+                    await self.outbox.react(m.chat_id, m.msg_id, "🥱")
+                except Exception as e:
+                    log.warning("reaction failed: %s", e)
+            return
         if decision is Decision.REPLY:
             if not direct:
                 mark_unsolicited(self.state, now)
@@ -179,6 +196,13 @@ class Botucha:
             self.store.clear_feedback(chat_id, msg_id, user_id)
         else:
             self.store.set_feedback(chat_id, msg_id, user_id, score, None, self.clock())
+
+    def _over_limit(self, user_id: int, now: float) -> bool:
+        calls = self._calls[user_id]
+        while calls and now - calls[0] > 60:
+            calls.popleft()
+        calls.append(now)
+        return len(calls) > self.cfg.trigger.user_calls_per_min
 
     # ---- replies ---------------------------------------------------------
     def _member_names(self) -> list[str]:

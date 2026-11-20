@@ -55,6 +55,9 @@ class CaptureOutbox:
     async def typing(self, chat_id):
         pass
 
+    async def leave(self, chat_id):
+        pass
+
 
 async def _nosleep(_):
     return None

@@ -68,6 +68,9 @@ class AiogramOutbox:
     async def react(self, chat_id: int, msg_id: int, emoji: str) -> None:
         await self.bot.set_message_reaction(chat_id, msg_id, reaction=[ReactionTypeEmoji(emoji=emoji)])
 
+    async def leave(self, chat_id: int) -> None:
+        await self.bot.leave_chat(chat_id)
+
     async def typing(self, chat_id: int) -> None:
         try:
             await self.bot.send_chat_action(chat_id, "typing")

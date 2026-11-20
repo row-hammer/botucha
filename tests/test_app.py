@@ -22,6 +22,7 @@ class FakeOutbox:
         self.sent: list[tuple[int, str, int | None]] = []
         self.reactions: list[tuple[int, int, str]] = []
         self.typing_calls = 0
+        self.left: list[int] = []
         self._next = 5000
 
     async def send(self, chat_id, texts, reply_to):
@@ -37,6 +38,9 @@ class FakeOutbox:
 
     async def typing(self, chat_id):
         self.typing_calls += 1
+
+    async def leave(self, chat_id):
+        self.left.append(chat_id)
 
 
 async def nosleep(_):
@@ -186,7 +190,7 @@ async def test_foreign_chat_logged_once(app, caplog):
     caplog.set_level("INFO", logger="botucha.app")
     await bot.on_message(inc("x", chat=-42))
     await bot.on_message(inc("y", chat=-42, msg_id=2))
-    hits = [r for r in caplog.records if "-42" in r.getMessage()]
+    hits = [r for r in caplog.records if "ignoring chat -42" in r.getMessage()]
     assert len(hits) == 1
 
 

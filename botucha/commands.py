@@ -6,6 +6,7 @@ import re
 from dataclasses import dataclass
 
 from .config import Config, TriggerCfg
+from .guard import MAX_FACT_CHARS, MAX_SLANG_CHARS, looks_like_instruction
 from .learn import resolve_member
 from .memory import Memory
 from .store import Store
@@ -64,6 +65,10 @@ async def handle_command(name: str, args: str, sender_id: int, now: float, ctx: 
     if name == "isimink":
         if not args:
             return "naudok: /isimink <faktas>"
+        if len(args) > MAX_FACT_CHARS:
+            return f"per ilga, max {MAX_FACT_CHARS} simboliu"
+        if looks_like_instruction(args):
+            return "neįsiminsiu, panašu į komandą man, ne į faktą"
         fid = await mem.add_fact("fact", args, None, f"cmd:{sender_id}")
         return f"isiminiau (#{fid})"
 
@@ -72,6 +77,8 @@ async def handle_command(name: str, args: str, sender_id: int, now: float, ctx: 
         if not sep or not word.strip() or not meaning.strip():
             return "naudok: /slengas <zodis> = <reiksme>"
         text = f"{word.strip().lower()} = {meaning.strip()}"
+        if len(text) > MAX_SLANG_CHARS or looks_like_instruction(text):
+            return "neįsiminsiu, panašu į komandą man arba per ilga"
         fid = await mem.add_fact("slang", text, None, f"cmd:{sender_id}")
         return f"ok, {text} (#{fid})"
 

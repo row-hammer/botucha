@@ -41,6 +41,7 @@ class TriggerCfg:
     burst_quiet_s: float
     burst_max_s: float
     tyla_default_min: int
+    user_calls_per_min: int = 5
 
 
 @dataclass(frozen=True)
@@ -88,7 +89,8 @@ def load_config(path: Path, env: Mapping[str, str]) -> Config:
             trigger=TriggerCfg(tuple(str(k).lower() for k in tr["keywords"]), float(tr["keyword_prob"]),
                                int(tr["random_n"]), int(tr["cooldown_s"]), int(tr["reaction_n"]),
                                tuple(tr["reactions"]), float(tr["burst_quiet_s"]),
-                               float(tr["burst_max_s"]), int(tr["tyla_default_min"])),
+                               float(tr["burst_max_s"]), int(tr["tyla_default_min"]),
+                               int(tr.get("user_calls_per_min", 5))),
             paths=PathsCfg(base / p["db"], base / p["persona"], base / p["style_examples"],
                            Path(export) if export else None),
             memory=MemoryCfg(tuple(int(u) for u in raw.get("memory", {}).get("locked_members", []))),

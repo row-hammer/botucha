@@ -30,6 +30,8 @@ reactions = ["🤡", "🗿", "💊", "🤣", "😈", "🥴", "💩", "🖕"]
 burst_quiet_s = 5
 burst_max_s = 20
 tyla_default_min = 60
+# Max direct calls per person per minute; more get a 🥱 reaction and are ignored.
+user_calls_per_min = 5
 
 [paths]
 db = "botucha.db"
