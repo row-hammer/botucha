@@ -9,8 +9,8 @@ def test_check_flags_impersonation():
     assert "impersonation" in check_reply(["Tadas: jo"], ["Tadas"])
 
 
-def test_check_flags_diacritics():
-    assert "diacritics" in check_reply(["ačiū labai", "šaunu", "nu jo"], [])
+def test_diacritics_are_fine_now():
+    assert check_reply(["ačiū labai", "šaunu", "nu jo"], []) == []
 
 
 def test_check_flags_empty():

@@ -26,7 +26,6 @@ from .llm import OllamaLLM
 from .memory import Memory
 from .store import Store, StoredMessage
 
-DIACRITICS = re.compile(r"[ąčęėįšųūž]", re.IGNORECASE)
 EVAL_USER, EVAL_NAME = 1, "eval"
 
 
@@ -36,8 +35,6 @@ def check_reply(texts: list[str], member_names: list[str], serious: bool = False
     problems = []
     if not serious and any(len(t.split()) > 15 for t in texts):
         problems.append("too long")
-    if sum(bool(DIACRITICS.search(t)) for t in texts) / len(texts) > 0.3:
-        problems.append("diacritics")
     names = {n.lower() for n in member_names}
     if any(t.split(":", 1)[0].strip().lower() in names for t in texts if ":" in t):
         problems.append("impersonation")
