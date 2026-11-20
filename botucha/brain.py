@@ -12,9 +12,12 @@ from .store import StoredMessage
 log = logging.getLogger(__name__)
 
 REPLY_INSTRUCTION = "atsakyk kaip botucha i paskutines zinutes"
-SERIOUS_LINE = ("RIMTAI rezimas: atsakyk trumpai, aiskiai ir faktiskai teisingai, be teatro ir be bajeriu. "
-                "Lengvas botuchos balsas tinka.")
+SERIOUS_LINE = ("RIMTAI REZIMAS DABAR IJUNGTAS: sita karta atsakyk kaip tikras finansu ekspertas. "
+                "2-6 trumpi sakiniai, faktiskai teisingai ir konkreciai (skaiciai, taisykles, rizikos), "
+                "be bajeriu, be degeno patarimu, be kalbu apie save. Rasyk paprastai, be lietuvisku raidziu.")
 MAX_LINES = 3
+SERIOUS_MAX_LINES = 8
+SERIOUS_NUM_PREDICT = 450
 
 
 @dataclass
@@ -32,7 +35,11 @@ class PromptContext:
 
 def _system(ctx: PromptContext) -> str:
     """Stable parts first so Ollama can reuse the cached prefix."""
-    parts = [ctx.persona.strip(), "Kaip grupe raso (tikri pavyzdziai):\n" + ctx.style_examples.strip()]
+    parts = [ctx.persona.strip()]
+    if ctx.serious:
+        parts.append(SERIOUS_LINE)  # no style examples: they pull answers back to 5-word banter
+    else:
+        parts.append("Kaip grupe raso (tikri pavyzdziai):\n" + ctx.style_examples.strip())
     if ctx.profiles:
         parts.append("Grupes nariai:\n" + "\n".join(f"- {n}: {p}" for n, p in ctx.profiles.items()))
     if ctx.slang:
@@ -71,7 +78,7 @@ def build_prompt(ctx: PromptContext, *, max_chars: int) -> list[dict]:
 _MD = re.compile(r"[*_`]")
 
 
-def clean_reply(raw: str, member_names: list[str]) -> list[str]:
+def clean_reply(raw: str, member_names: list[str], max_lines: int = MAX_LINES) -> list[str]:
     names = {n.lower() for n in member_names if n}
     out: list[str] = []
     for line in raw.splitlines():
@@ -87,15 +94,18 @@ def clean_reply(raw: str, member_names: list[str]) -> list[str]:
         line = line.strip().strip('"„“”\'').strip()
         if line:
             out.append(line)
-    return out[:MAX_LINES]
+    return out[:max_lines]
 
 
 async def generate_reply(llm: LLM, ctx: PromptContext, *, num_predict: int, max_chars: int,
                          member_names: list[str]) -> list[str] | None:
     messages = build_prompt(ctx, max_chars=max_chars)
+    if ctx.serious:
+        num_predict = max(num_predict, SERIOUS_NUM_PREDICT)
+    max_lines = SERIOUS_MAX_LINES if ctx.serious else MAX_LINES
     for attempt in range(2):
         try:
-            texts = clean_reply(await llm.chat(messages, num_predict=num_predict), member_names)
+            texts = clean_reply(await llm.chat(messages, num_predict=num_predict), member_names, max_lines)
         except Exception as e:  # model down, timeout, bad response
             log.warning("generation failed (attempt %d): %s", attempt + 1, e)
             continue

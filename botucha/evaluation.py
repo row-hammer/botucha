@@ -30,11 +30,11 @@ DIACRITICS = re.compile(r"[ąčęėįšųūž]", re.IGNORECASE)
 EVAL_USER, EVAL_NAME = 1, "eval"
 
 
-def check_reply(texts: list[str], member_names: list[str]) -> list[str]:
+def check_reply(texts: list[str], member_names: list[str], serious: bool = False) -> list[str]:
     if not texts:
         return ["empty"]
     problems = []
-    if any(len(t.split()) > 15 for t in texts):
+    if not serious and any(len(t.split()) > 15 for t in texts):
         problems.append("too long")
     if sum(bool(DIACRITICS.search(t)) for t in texts) / len(texts) > 0.3:
         problems.append("diacritics")
@@ -85,7 +85,7 @@ async def run_persona(cfg, prompts: list[dict], out_dir: Path) -> Path:
         t = time.time()
         await bot.run_job([ReplyJob(chat_id, msg_id, direct=True, serious=bool(p.get("serious")), recall=False)])
         secs = time.time() - t
-        problems = check_reply(out.sent, bot._member_names())
+        problems = check_reply(out.sent, bot._member_names(), serious=bool(p.get("serious")))
         lines += [f"## {p['name']}", f"> {p['text']}", "", *[f"    {s}" for s in out.sent], "",
                   f"*{secs:.1f}s*" + (f" — **problems: {', '.join(problems)}**" if problems else ""), ""]
         print(f"{p['name']}: {problems or 'ok'} ({secs:.1f}s)", flush=True)

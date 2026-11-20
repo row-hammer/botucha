@@ -19,3 +19,7 @@ def test_check_flags_empty():
 
 def test_check_clean_ok():
     assert check_reply(["hodlinam iki nulio xdd", "nu nax"], ["Tadas"]) == []
+
+
+def test_serious_answers_may_be_long():
+    assert check_reply(["a " * 30], [], serious=True) == []

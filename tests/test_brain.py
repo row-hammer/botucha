@@ -73,3 +73,20 @@ async def test_retry_then_none():
 async def test_retry_after_exception():
     llm = FakeLLM([TimeoutError(), "ok"])
     assert await generate_reply(llm, ctx(), num_predict=150, max_chars=10_000, member_names=[]) == ["ok"]
+
+
+def test_serious_mode_drops_style_and_instructs_system():
+    msgs = build_prompt(ctx(serious=True), max_chars=100_000)
+    assert "STYLE" not in msgs[0]["content"]
+    assert "RIMTAI" in msgs[0]["content"]
+
+
+def test_clean_serious_allows_more_lines():
+    raw = "\n".join(f"eilute {i}" for i in range(10))
+    assert len(clean_reply(raw, [], max_lines=8)) == 8
+
+
+async def test_serious_uses_bigger_budget():
+    llm = FakeLLM(["a\nb\nc\nd\ne"])
+    out = await generate_reply(llm, ctx(serious=True), num_predict=150, max_chars=10_000, member_names=[])
+    assert len(out) == 5 and llm.calls[0]["num_predict"] >= 400
