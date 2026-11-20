@@ -1,0 +1,13 @@
+# secrets and private data
+.env
+*.db
+*.db-*
+exports/
+eval/out/
+result.json
+
+# python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
