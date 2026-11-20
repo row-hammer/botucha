@@ -84,3 +84,38 @@ async def test_ivertinimai_admin_only(app):
     await bot.on_message(inc("/ivertinimai", msg_id=65, user=admin))
     reply = out.sent[-1][1]
     assert "👍 0" in reply and "👎 1" in reply and "hodlinam iki nulio" in reply and "nejuokinga" in reply
+
+
+async def test_pataisyk_stores_correction(app):
+    bot, store, llm, out = await app()
+    await _bot_message(bot, store, text="petras varnas xdd")
+    await bot.on_message(inc("/pataisyk petras vėl išėjo už duonos xdd", msg_id=70, reply_to=50, reply_to_bot=True))
+    c = store.recent_corrections(1)[0]
+    assert (c.original, c.text, c.user_id) == ("petras varnas xdd", "petras vėl išėjo už duonos xdd", 111)
+    assert "pataisym" in out.sent[-1][1] and llm.calls == []
+
+
+async def test_pataisyk_overwrites_same_person(app):
+    bot, store, _, _ = await app()
+    await _bot_message(bot, store)
+    for i, t in enumerate(["pirmas", "antras"]):
+        await bot.on_message(inc(f"/pataisyk {t}", msg_id=71 + i, reply_to=50, reply_to_bot=True))
+    assert [c.text for c in store.recent_corrections(10)] == ["antras"]
+
+
+async def test_pataisyk_needs_reply_and_text(app):
+    bot, store, _, out = await app()
+    await bot.on_message(inc("/pataisyk geriau taip", msg_id=73))
+    assert "reply" in out.sent[-1][1]
+    await _bot_message(bot, store)
+    await bot.on_message(inc("/pataisyk", msg_id=74, reply_to=50, reply_to_bot=True))
+    assert "/pataisyk <" in out.sent[-1][1]
+    assert store.recent_corrections(10) == []
+
+
+async def test_ivertinimai_shows_corrections(app):
+    bot, store, _, out = await app()
+    await _bot_message(bot, store, text="blogas atsakymas")
+    store.set_correction(C, 50, 111, "geras atsakymas", 1.0)
+    await bot.on_message(inc("/ivertinimai", msg_id=75, user=bot.cfg.telegram.admin_id))
+    assert "blogas atsakymas → geras atsakymas" in out.sent[-1][1]

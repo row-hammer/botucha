@@ -111,7 +111,7 @@ class Botucha:
                     self.worker.submit(ReplyJob(m.chat_id, m.msg_id, direct=True, serious=name == "rimtai",
                                                 recall=name == "atsimeni", links=name == "atsimeni"))
                     return
-                if name in ("gerai", "blogai"):
+                if name in ("gerai", "blogai", "pataisyk"):
                     await self._command_feedback(m, name, args)
                     return
                 ctx = CommandContext(self.memory, self.store, self.state, self.cfg, self.started_at,
@@ -157,7 +157,13 @@ class Botucha:
 
     async def _command_feedback(self, m: Incoming, name: str, args: str) -> None:
         if not self._is_own(m.chat_id, m.reply_to):
-            reply = "atsakyk (reply) į mano žinutę su /gerai arba /blogai"
+            reply = "atsakyk (reply) į mano žinutę su /gerai, /blogai arba /pataisyk"
+        elif name == "pataisyk":
+            if not args:
+                reply = "naudok: /pataisyk <kaip turėjau atsakyti>"
+            else:
+                self.store.set_correction(m.chat_id, m.reply_to, m.user_id, args, self.clock())
+                reply = "ačiū, užrašiau pataisymą"
         else:
             self.store.set_feedback(m.chat_id, m.reply_to, m.user_id, 1 if name == "gerai" else -1,
                                     args or None, self.clock())

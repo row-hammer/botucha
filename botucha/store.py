@@ -37,6 +37,11 @@ CREATE TABLE IF NOT EXISTS feedback (
     score INTEGER NOT NULL, reason TEXT, ts REAL NOT NULL,
     PRIMARY KEY (chat_id, msg_id, user_id)
 );
+CREATE TABLE IF NOT EXISTS corrections (
+    chat_id INTEGER NOT NULL, msg_id INTEGER NOT NULL, user_id INTEGER NOT NULL,
+    text TEXT NOT NULL, ts REAL NOT NULL,
+    PRIMARY KEY (chat_id, msg_id, user_id)
+);
 """
 
 
@@ -59,6 +64,16 @@ class BadFeedback:
     user_id: int
     text: str
     reason: str | None
+    ts: float
+
+
+@dataclass
+class Correction:
+    chat_id: int
+    msg_id: int
+    user_id: int
+    original: str
+    text: str
     ts: float
 
 
@@ -147,6 +162,20 @@ class Store:
             "JOIN messages m ON m.chat_id=f.chat_id AND m.msg_id=f.msg_id "
             "WHERE f.score<0 ORDER BY f.ts DESC LIMIT ?", (n,)).fetchall()
         return [BadFeedback(*r) for r in rows]
+
+    def set_correction(self, chat_id: int, msg_id: int, user_id: int, text: str, ts: float) -> None:
+        """A member's better version of one of Botucha's replies (fine-tuning data)."""
+        self.conn.execute(
+            "INSERT INTO corrections (chat_id, msg_id, user_id, text, ts) VALUES (?,?,?,?,?) "
+            "ON CONFLICT(chat_id, msg_id, user_id) DO UPDATE SET text=excluded.text, ts=excluded.ts",
+            (chat_id, msg_id, user_id, text, ts))
+        self.conn.commit()
+
+    def recent_corrections(self, n: int) -> list[Correction]:
+        rows = self.conn.execute(
+            "SELECT c.chat_id, c.msg_id, c.user_id, m.text, c.text, c.ts FROM corrections c "
+            "JOIN messages m ON m.chat_id=c.chat_id AND m.msg_id=c.msg_id ORDER BY c.ts DESC LIMIT ?", (n,)).fetchall()
+        return [Correction(*r) for r in rows]
 
     def get_state(self, key: str, default: str | None = None) -> str | None:
         r = self.conn.execute("SELECT value FROM state WHERE key=?", (key,)).fetchone()

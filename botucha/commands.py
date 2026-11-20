@@ -141,6 +141,10 @@ async def handle_command(name: str, args: str, sender_id: int, now: float, ctx: 
         if recent:
             lines.append("paskutiniai blogi:")
             lines += [f"- {b.text}" + (f" — {b.reason}" if b.reason else "") for b in recent]
+        fixes = store.recent_corrections(10)
+        if fixes:
+            lines.append("paskutiniai pataisymai:")
+            lines += [f"- {c.original} → {c.text}" for c in fixes]
         return "\n".join(lines)
 
     return None

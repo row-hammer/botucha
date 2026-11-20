@@ -56,6 +56,7 @@ is offline.
 | everyone | `/atsimeni <ko ieskot>` | find an old conversation, with links |
 | everyone | `/rimtai <klausimas>` or "rimtai" in a message to him | a straight answer |
 | everyone | `/tyla [min]` | no uninvited replies for N minutes (default 60) |
+| everyone | reply to his message with `/pataisyk <geresnis atsakymas>` | store how he should have answered (fine-tuning data) |
 | everyone | reply to his message with `/gerai` or `/blogai [kodel]` | rate a reply (also 👍❤️🔥🤣😁💯 good, 👎💩🤮😴🥱 bad as reactions; reactions need him to be a group admin) |
 | admin | `/pamirsk <nr>`, `/taisyk <nr> <tekstas>` | delete / correct a fact |
 | admin | `/daznis <n>` | uninvited replies ~1 in n messages (default 25) |
