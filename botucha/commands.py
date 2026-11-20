@@ -11,7 +11,7 @@ from .memory import Memory
 from .store import Store
 from .trigger import TriggerState
 
-ADMIN_ONLY = {"pamirsk", "taisyk", "daznis", "isjunk", "ijunk", "statusas"}
+ADMIN_ONLY = {"pamirsk", "taisyk", "daznis", "isjunk", "ijunk", "statusas", "ivertinimai"}
 NOT_ADMIN = "tik bosas gali"
 
 
@@ -130,7 +130,17 @@ async def handle_command(name: str, args: str, sender_id: int, now: float, ctx: 
             f"zinuciu: {msgs}, pokalbiu gabalu: {chunks}, faktu: {facts}",
             f"veikiu: {_uptime(now - ctx.started_at)}",
             f"ijungtas: {'taip' if ctx.state.enabled else 'ne'}, daznis 1/{ctx.state.random_n}",
+            f"ivertinimai: 👍 {store.feedback_totals()[0]} / 👎 {store.feedback_totals()[1]}",
             f"paskutine klaida: {ctx.last_error or 'nera'}",
         ])
+
+    if name == "ivertinimai":
+        good, bad = store.feedback_totals()
+        lines = [f"👍 {good} / 👎 {bad}"]
+        recent = store.recent_bad_feedback(10)
+        if recent:
+            lines.append("paskutiniai blogi:")
+            lines += [f"- {b.text}" + (f" — {b.reason}" if b.reason else "") for b in recent]
+        return "\n".join(lines)
 
     return None

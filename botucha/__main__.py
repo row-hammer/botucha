@@ -9,7 +9,7 @@ import random
 from pathlib import Path
 
 from aiogram import Bot, Dispatcher
-from aiogram.types import Message, ReactionTypeEmoji, ReplyParameters, User
+from aiogram.types import Message, MessageReactionUpdated, ReactionTypeEmoji, ReplyParameters, User
 
 from .app import Botucha, Incoming
 from .config import load_config
@@ -91,6 +91,11 @@ async def main(config_path: Path) -> None:
     async def on_message(m: Message) -> None:
         await app.on_message(to_incoming(m, me, edited=False))
 
+    @dp.message_reaction()
+    async def on_reaction(r: MessageReactionUpdated) -> None:
+        emojis = [x.emoji for x in r.new_reaction if isinstance(x, ReactionTypeEmoji)]
+        await app.on_reaction(r.chat.id, r.message_id, r.user.id if r.user else None, emojis)
+
     @dp.edited_message()
     async def on_edit(m: Message) -> None:
         await app.on_message(to_incoming(m, me, edited=True))
@@ -104,7 +109,7 @@ async def main(config_path: Path) -> None:
     tasks = [asyncio.create_task(app.worker.run()), asyncio.create_task(app.learn_loop()),
              asyncio.create_task(bootstrap())]
     try:
-        await dp.start_polling(tg, allowed_updates=["message", "edited_message"])
+        await dp.start_polling(tg, allowed_updates=["message", "edited_message", "message_reaction"])
     finally:
         await app.worker.stop()
         for t in tasks:

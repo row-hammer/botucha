@@ -32,6 +32,11 @@ CREATE TABLE IF NOT EXISTS profiles (
     user_id INTEGER PRIMARY KEY, text TEXT NOT NULL, updated REAL NOT NULL
 );
 CREATE TABLE IF NOT EXISTS state (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS feedback (
+    chat_id INTEGER NOT NULL, msg_id INTEGER NOT NULL, user_id INTEGER NOT NULL,
+    score INTEGER NOT NULL, reason TEXT, ts REAL NOT NULL,
+    PRIMARY KEY (chat_id, msg_id, user_id)
+);
 """
 
 
@@ -45,6 +50,16 @@ class StoredMessage:
     text: str
     reply_to: int | None = None
     is_bot: bool = False
+
+
+@dataclass
+class BadFeedback:
+    chat_id: int
+    msg_id: int
+    user_id: int
+    text: str
+    reason: str | None
+    ts: float
 
 
 @dataclass
@@ -105,6 +120,33 @@ class Store:
 
     def members(self) -> dict[int, Member]:
         return {r[0]: Member(*r) for r in self.conn.execute("SELECT user_id, name, username FROM members")}
+
+    def get_message(self, chat_id: int, msg_id: int) -> StoredMessage | None:
+        r = self.conn.execute(f"SELECT {_COLS} FROM messages WHERE chat_id=? AND msg_id=?", (chat_id, msg_id)).fetchone()
+        return _row(r) if r else None
+
+    # ---- feedback on Botucha's messages ------------------------------------
+    def set_feedback(self, chat_id: int, msg_id: int, user_id: int, score: int, reason: str | None, ts: float) -> None:
+        self.conn.execute(
+            "INSERT INTO feedback (chat_id, msg_id, user_id, score, reason, ts) VALUES (?,?,?,?,?,?) "
+            "ON CONFLICT(chat_id, msg_id, user_id) DO UPDATE SET score=excluded.score, reason=excluded.reason, "
+            "ts=excluded.ts", (chat_id, msg_id, user_id, score, reason, ts))
+        self.conn.commit()
+
+    def clear_feedback(self, chat_id: int, msg_id: int, user_id: int) -> None:
+        self.conn.execute("DELETE FROM feedback WHERE chat_id=? AND msg_id=? AND user_id=?", (chat_id, msg_id, user_id))
+        self.conn.commit()
+
+    def feedback_totals(self) -> tuple[int, int]:
+        r = self.conn.execute("SELECT COALESCE(SUM(score>0),0), COALESCE(SUM(score<0),0) FROM feedback").fetchone()
+        return int(r[0]), int(r[1])
+
+    def recent_bad_feedback(self, n: int) -> list[BadFeedback]:
+        rows = self.conn.execute(
+            "SELECT f.chat_id, f.msg_id, f.user_id, m.text, f.reason, f.ts FROM feedback f "
+            "JOIN messages m ON m.chat_id=f.chat_id AND m.msg_id=f.msg_id "
+            "WHERE f.score<0 ORDER BY f.ts DESC LIMIT ?", (n,)).fetchall()
+        return [BadFeedback(*r) for r in rows]
 
     def get_state(self, key: str, default: str | None = None) -> str | None:
         r = self.conn.execute("SELECT value FROM state WHERE key=?", (key,)).fetchone()

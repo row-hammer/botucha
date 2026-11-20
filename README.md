@@ -56,10 +56,12 @@ is offline.
 | everyone | `/atsimeni <ko ieskot>` | find an old conversation, with links |
 | everyone | `/rimtai <klausimas>` or "rimtai" in a message to him | a straight answer |
 | everyone | `/tyla [min]` | no uninvited replies for N minutes (default 60) |
+| everyone | reply to his message with `/gerai` or `/blogai [kodel]` | rate a reply (also 👍❤️🔥🤣😁💯 good, 👎💩🤮😴🥱 bad as reactions; reactions need him to be a group admin) |
 | admin | `/pamirsk <nr>`, `/taisyk <nr> <tekstas>` | delete / correct a fact |
 | admin | `/daznis <n>` | uninvited replies ~1 in n messages (default 25) |
 | admin | `/isjunk`, `/ijunk` | off / on |
 | admin | `/statusas` | model, memory, uptime, last error |
+| admin | `/ivertinimai` | good/bad totals and the last 10 bad replies with reasons |
 
 He always answers when mentioned, replied to, or called "botucha"; sometimes on keywords (spx, vwce,
 akcijos, kripto, btc, leverage, short, parduot, nvidia, coreweave) or at random; at most one uninvited

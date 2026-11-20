@@ -14,6 +14,7 @@ from .brain import PromptContext, generate_reply
 from .commands import CommandContext, handle_command, load_trigger_state, message_link, parse_command
 from .config import Config
 from .export_import import import_export, parse_export
+from .feedback import score_for_reactions
 from .learn import learn_once, profiles_due, refresh_profiles, should_learn
 from .llm import LLM
 from .memory import Memory
@@ -110,6 +111,9 @@ class Botucha:
                     self.worker.submit(ReplyJob(m.chat_id, m.msg_id, direct=True, serious=name == "rimtai",
                                                 recall=name == "atsimeni", links=name == "atsimeni"))
                     return
+                if name in ("gerai", "blogai"):
+                    await self._command_feedback(m, name, args)
+                    return
                 ctx = CommandContext(self.memory, self.store, self.state, self.cfg, self.started_at,
                                      self.last_error, m.chat_id)
                 try:
@@ -144,6 +148,31 @@ class Botucha:
                 await self.outbox.react(m.chat_id, m.msg_id, self.rng.choice(self.cfg.trigger.reactions))
             except Exception as e:
                 log.warning("reaction failed: %s", e)
+
+    def _is_own(self, chat_id: int, msg_id: int | None) -> bool:
+        if msg_id is None:
+            return False
+        msg = self.store.get_message(chat_id, msg_id)
+        return bool(msg and msg.user_id == self.bot_user_id)
+
+    async def _command_feedback(self, m: Incoming, name: str, args: str) -> None:
+        if not self._is_own(m.chat_id, m.reply_to):
+            reply = "atsakyk (reply) į mano žinutę su /gerai arba /blogai"
+        else:
+            self.store.set_feedback(m.chat_id, m.reply_to, m.user_id, 1 if name == "gerai" else -1,
+                                    args or None, self.clock())
+            reply = "ačiū, užrašiau"
+        await self.outbox.send(m.chat_id, [reply], m.msg_id)
+
+    async def on_reaction(self, chat_id: int, msg_id: int, user_id: int | None, emojis: list[str]) -> None:
+        """A member changed their reaction on a message. Only reactions on Botucha's messages count."""
+        if chat_id not in self.cfg.telegram.chat_ids or user_id is None or not self._is_own(chat_id, msg_id):
+            return
+        score = score_for_reactions(emojis)
+        if score is None:
+            self.store.clear_feedback(chat_id, msg_id, user_id)
+        else:
+            self.store.set_feedback(chat_id, msg_id, user_id, score, None, self.clock())
 
     # ---- replies ---------------------------------------------------------
     def _member_names(self) -> list[str]:
