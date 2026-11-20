@@ -99,3 +99,21 @@ def test_clean_drops_mangled_member_and_role_labels():
 
 def test_clean_keeps_normal_colon_text():
     assert clean_reply("taip: 3x leverage", ["Tadas"]) == ["taip: 3x leverage"]
+
+
+async def test_foreign_script_triggers_retry():
+    llm = FakeLLM(["nu v टास्कai i norvegija", "nu i norvegija xdd"])
+    out = await generate_reply(llm, ctx(), num_predict=150, max_chars=10_000, member_names=[])
+    assert out == ["nu i norvegija xdd"] and len(llm.calls) == 2
+
+
+async def test_foreign_script_words_removed_after_second_try():
+    llm = FakeLLM(["vertė kريسės", "vertė kريسės labai"])
+    out = await generate_reply(llm, ctx(), num_predict=150, max_chars=10_000, member_names=[])
+    assert out == ["vertė labai"]
+
+
+def test_lithuanian_cyrillic_emoji_allowed():
+    from botucha.brain import has_foreign_script
+    assert not has_foreign_script("ąčęėįšųūž xdd 🤡 давай 3x")
+    assert has_foreign_script("üçių") and has_foreign_script("टास्क") and has_foreign_script("كريس")

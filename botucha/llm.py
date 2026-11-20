@@ -23,5 +23,6 @@ class OllamaLLM:
         r = await self.client.chat(
             model=self.cfg.chat_model, messages=messages, think=False, keep_alive=self.cfg.keep_alive,
             format="json" if fmt_json else None,
-            options={"num_ctx": self.cfg.num_ctx, "num_predict": num_predict})
+            options={"num_ctx": self.cfg.num_ctx, "num_predict": num_predict,
+                     "temperature": self.cfg.temperature})
         return r["message"]["content"] or ""

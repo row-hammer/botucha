@@ -88,3 +88,23 @@ def test_example_config_has_no_private_values():
     text = (FIX.parent.parent.parent / "config.example.toml").read_text()
     for private in ("100000001", "1234567890", "/home/user"):
         assert private not in text
+
+
+async def test_temperature_from_config_is_sent():
+    cfg = ModelCfg("m", "e", 1024, 10, "1m", "http://localhost:11434", temperature=0.6)
+    llm = OllamaLLM(cfg)
+    seen = {}
+
+    async def fake_chat(**kw):
+        seen.update(kw)
+        return {"message": {"content": "ok"}}
+
+    llm.client.chat = fake_chat
+    await llm.chat([{"role": "user", "content": "x"}], num_predict=5)
+    assert seen["options"]["temperature"] == 0.6
+
+
+def test_example_config_temperature():
+    from botucha.config import load_config
+    cfg = load_config(FIX.parent.parent.parent / "config.example.toml", {"BOTUCHA_TOKEN": "t"})
+    assert cfg.model.temperature == 0.7

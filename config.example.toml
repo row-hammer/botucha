@@ -16,6 +16,8 @@ num_ctx = 32768
 num_predict = 150
 keep_alive = "30m"
 ollama_host = "http://localhost:11434"
+# Lower = fewer invented words and grammar slips, higher = more random humor.
+temperature = 0.7
 
 [trigger]
 # Word prefixes, case-insensitive, diacritics ignored.

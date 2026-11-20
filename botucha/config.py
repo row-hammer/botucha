@@ -27,6 +27,7 @@ class ModelCfg:
     num_predict: int
     keep_alive: str
     ollama_host: str
+    temperature: float = 0.7
 
 
 @dataclass(frozen=True)
@@ -76,7 +77,8 @@ def load_config(path: Path, env: Mapping[str, str]) -> Config:
         return Config(
             telegram=TelegramCfg(token, chat_ids, int(t["admin_id"]), str(t["bot_name_regex"])),
             model=ModelCfg(str(m["chat_model"]), str(m["embed_model"]), int(m["num_ctx"]),
-                           int(m["num_predict"]), str(m["keep_alive"]), str(m["ollama_host"])),
+                           int(m["num_predict"]), str(m["keep_alive"]), str(m["ollama_host"]),
+                           float(m.get("temperature", 0.7))),
             trigger=TriggerCfg(tuple(str(k).lower() for k in tr["keywords"]), float(tr["keyword_prob"]),
                                int(tr["random_n"]), int(tr["cooldown_s"]), int(tr["reaction_n"]),
                                tuple(tr["reactions"]), float(tr["burst_quiet_s"]),

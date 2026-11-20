@@ -14,7 +14,7 @@ log = logging.getLogger(__name__)
 REPLY_INSTRUCTION = "atsakyk kaip botucha i paskutines zinutes"
 SERIOUS_LINE = ("RIMTAI REZIMAS DABAR IJUNGTAS: sita karta atsakyk kaip tikras finansu ekspertas. "
                 "2-6 trumpi sakiniai, faktiskai teisingai ir konkreciai (skaiciai, taisykles, rizikos), "
-                "be bajeriu, be degeno patarimu, be kalbu apie save. Rasyk paprastai, be lietuvisku raidziu.")
+                "be bajeriu, be degeno patarimu, be kalbu apie save. Rasyk taisyklinga lietuviu kalba su lietuviskomis raidemis.")
 MAX_LINES = 3
 SERIOUS_MAX_LINES = 8
 SERIOUS_NUM_PREDICT = 450
@@ -102,18 +102,39 @@ def clean_reply(raw: str, member_names: list[str], max_lines: int = MAX_LINES) -
     return out[:max_lines]
 
 
+LT_LETTERS = set("ąčęėįšųūžĄČĘĖĮŠŲŪŽ")
+
+
+def _foreign_char(c: str) -> bool:
+    """A letter that is neither ASCII, Lithuanian nor Cyrillic (the group writes Russianisms)."""
+    return c.isalpha() and not (c.isascii() or c in LT_LETTERS or "\u0400" <= c <= "\u04ff")
+
+
+def has_foreign_script(text: str) -> bool:
+    return any(_foreign_char(c) for c in text)
+
+
+def strip_foreign(texts: list[str]) -> list[str]:
+    out = [" ".join(w for w in t.split() if not has_foreign_script(w)) for t in texts]
+    return [t for t in out if t]
+
+
 async def generate_reply(llm: LLM, ctx: PromptContext, *, num_predict: int, max_chars: int,
                          member_names: list[str]) -> list[str] | None:
     messages = build_prompt(ctx, max_chars=max_chars)
     if ctx.serious:
         num_predict = max(num_predict, SERIOUS_NUM_PREDICT)
     max_lines = SERIOUS_MAX_LINES if ctx.serious else MAX_LINES
+    fallback: list[str] | None = None
     for attempt in range(2):
         try:
             texts = clean_reply(await llm.chat(messages, num_predict=num_predict), member_names, max_lines)
         except Exception as e:  # model down, timeout, bad response
             log.warning("generation failed (attempt %d): %s", attempt + 1, e)
             continue
+        if texts and any(has_foreign_script(t) for t in texts):
+            fallback = strip_foreign(texts) or fallback  # model glitch: stray Hindi/Arabic/Turkish words
+            continue
         if texts:
             return texts
-    return None
+    return fallback or None
