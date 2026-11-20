@@ -252,7 +252,7 @@ class Botucha:
             ctx = PromptContext(
                 persona=_read(self.cfg.paths.persona), style_examples=_read(self.cfg.paths.style_examples),
                 profiles={members[u].name: p for u, p in self.memory.profiles().items() if u in members},
-                slang=[f.text for f in self.memory.slang_in([m.text for m in history])],
+                slang=self.memory.all_slang(),
                 chunks=[h.chunk.text for h in hits], facts=[f.text for f in facts], history=history,
                 bot_user_id=self.bot_user_id, serious=any(j.serious for j in jobs))
             if self.prices:

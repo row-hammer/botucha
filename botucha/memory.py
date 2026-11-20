@@ -182,6 +182,20 @@ class Memory:
         return [f for f in self._facts("WHERE kind='slang'", ())
                 if f.text.split("=", 1)[0].strip().lower() in tokens]
 
+    def all_slang(self, limit: int = 80) -> list[str]:
+        """Every slang meaning, one per word. Words sharing a 4-letter stem (saiba/saibos) count as one;
+        a member-taught entry beats an automatic one, otherwise the newest wins."""
+        from .trigger import fold
+        best: dict[str, Fact] = {}
+        for f in self._facts("WHERE kind='slang'", ()):
+            word = fold(f.text.split("=", 1)[0].strip()).split()
+            key = word[0][:4] if word else ""
+            cur = best.get(key)
+            rank = (f.source.startswith("cmd:"), f.updated, f.id)
+            if cur is None or rank > (cur.source.startswith("cmd:"), cur.updated, cur.id):
+                best[key] = f
+        return [f.text for f in sorted(best.values(), key=lambda f: f.id)][:limit]
+
     # ---- profiles -------------------------------------------------------
     def set_profile(self, user_id: int, text: str) -> None:
         self.db.execute("INSERT INTO profiles (user_id, text, updated) VALUES (?,?,?) "

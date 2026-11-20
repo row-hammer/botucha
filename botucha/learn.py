@@ -12,6 +12,8 @@ from .store import Store
 
 log = logging.getLogger(__name__)
 
+BOT_LINE_PREFIX = "Botucha:"
+
 EXTRACT_PROMPT = (
     "Tu skaitai lietuviu draugu Telegram grupes pokalbi. Isrink NAUJUS faktus apie grupes narius "
     "(kuo investuoja, ka dirba, iprociai, vidiniai bajeriai, kas ka sake svarbaus) ir slengo zodzius su ju "
@@ -65,7 +67,9 @@ async def learn_once(memory: Memory, llm: LLM, chat_id: int, *, source: str = "a
     new = memory.chunks_after(chat_id, cursor)
     if not new:
         return 0
-    text = "\n---\n".join(c.text for _, c in new)
+    # Botucha's own lines are not the group's language: learning from them would feed his jokes back to him.
+    text = "\n---\n".join("\n".join(l for l in c.text.splitlines() if not l.startswith(BOT_LINE_PREFIX))
+                          for _, c in new)
     raw = await llm.chat([{"role": "system", "content": EXTRACT_PROMPT}, {"role": "user", "content": text}],
                          num_predict=800, fmt_json=True)
     ext = parse_extraction(raw)
