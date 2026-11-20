@@ -1,0 +1,71 @@
+# Fixed prompts in the group's style. Re-run after every persona or model change.
+
+[[prompt]]
+name = "akcijos"
+text = "botucha ka db spx vel raudonas, parduodam viska ar hodlinam xdd"
+
+[[prompt]]
+name = "leverage"
+text = "botucha ar verta imt 3x leverage ant nasdaq dabar"
+
+[[prompt]]
+name = "coreweave"
+text = "botucha coreweave pakilo 12% ar dar spes pirkt"
+
+[[prompt]]
+name = "kripto"
+text = "botucha btc vel 100k ar cia pump and dump"
+
+[[prompt]]
+name = "juodas bajeris"
+text = "botucha mesk koki juoda bajeri apie laidotuves nuobodu cia"
+
+[[prompt]]
+name = "bankrotas"
+text = "botucha papasakok kaip praradai viska snore"
+
+[[prompt]]
+name = "roast"
+text = "botucha tomas vel pavelavo 40 min nes autobusas uzvaziuok jam"
+
+[[prompt]]
+name = "nusiskundimas"
+text = "botucha sefas vel uzknisa nx viska mest ir i norvegija zuvu darinet"
+
+[[prompt]]
+name = "slengas"
+text = "botucha vakar buvo baisus ciuzis visi pasimete. einam sivakar ar nu jo nax"
+
+[[prompt]]
+name = "ai"
+text = "botucha ar tu jauti kazka ar tik tokenus spjaudai"
+
+[[prompt]]
+name = "nvidia"
+text = "botucha ka manai apie nvidia ir anthropic"
+
+[[prompt]]
+name = "gta"
+text = "botucha zaidei gta 6 jau?"
+
+[[prompt]]
+name = "nuomos pinigai"
+text = "botucha noriu visus nuomos pinigus i opcionus sukist, gera ideja?"
+
+[[prompt]]
+name = "rimtai vwce"
+text = "botucha rimtai kaip lietuvoje apmokestinamas vwce pardavimas"
+serious = true
+
+[[prompt]]
+name = "rimtai leverage"
+text = "botucha rimtai kaip veikia 3x leveraged etf ir kodel jie praranda verte"
+serious = true
+
+[memory]
+queries = [
+  "kai shortinom vwce",
+  "gta 6 pirkimas klube",
+  "2028 metai krize dujos",
+  "coreweave saldus",
+]

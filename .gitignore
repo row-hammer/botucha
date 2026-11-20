@@ -12,3 +12,4 @@ __pycache__/
 .venv/
 .pytest_cache/
 style_examples.txt
+config.toml
