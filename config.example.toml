@@ -37,3 +37,7 @@ persona = "persona.md"
 style_examples = "style_examples.txt"
 # Telegram Desktop export loaded once on first start. Remove the line to skip.
 # export = "/path/to/ChatExport/result.json"
+
+# [memory]
+# User IDs whose memory you keep by hand: no automatic facts, no profile refresh.
+# locked_members = [123456789]

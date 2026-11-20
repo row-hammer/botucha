@@ -81,3 +81,29 @@ def test_profiles_due():
     s, _ = setup()
     assert profiles_due(s, C, every=2) is True
     assert profiles_due(s, C, every=3) is False
+
+
+async def test_locked_member_gets_no_auto_facts():
+    s, mem = setup()
+    await mem.index_new_chunks(C)
+    raw = json.dumps({"facts": [{"about": "tada", "text": "tadas vel shortina"},
+                                {"about": "mantas", "text": "mantas zaidzia gta"}], "slang": []})
+    assert await learn_once(mem, FakeLLM([raw]), C, locked=frozenset({111})) == 1
+    assert mem.facts_about(111) == [] and mem.facts_about(222)
+
+
+async def test_locked_member_profile_not_refreshed():
+    s, mem = setup()
+    mem.set_profile(111, "rankinis profilis")
+    await refresh_profiles(mem, FakeLLM(["naujas mantas profilis"]), s, C, locked=frozenset({111}))
+    assert mem.profiles() == {111: "rankinis profilis", 222: "naujas mantas profilis"}
+
+
+def test_config_locked_members(tmp_path):
+    from pathlib import Path
+    from botucha.config import load_config
+    ex = Path(__file__).parent.parent / "config.example.toml"
+    assert load_config(ex, {"BOTUCHA_TOKEN": "t"}).memory.locked_members == ()
+    p = tmp_path / "c.toml"
+    p.write_text(ex.read_text() + "\n[memory]\nlocked_members = [111]\n")
+    assert load_config(p, {"BOTUCHA_TOKEN": "t"}).memory.locked_members == (111,)

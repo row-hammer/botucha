@@ -77,6 +77,7 @@ class Botucha:
         self.state = load_trigger_state(store, cfg.trigger)
         self.last_error: str | None = None
         self._ignored_chats: set[int] = set()
+        self._locked = frozenset(cfg.memory.locked_members)
         self._bg_lock = asyncio.Lock()  # bootstrap and learning never overlap
         self.worker = ReplyWorker(self.run_job, quiet_s=cfg.trigger.burst_quiet_s,
                                   max_wait_s=cfg.trigger.burst_max_s)
@@ -230,10 +231,10 @@ class Botucha:
                                 reply_pending=self.worker.pending):
                 continue
             await self.memory.index_new_chunks(chat_id, force=True)
-            await learn_once(self.memory, self.llm, chat_id)
+            await learn_once(self.memory, self.llm, chat_id, locked=self._locked)
             self.store.set_state(key, str(self.store.last_rowid(chat_id)))
             if profiles_due(self.store, chat_id):
-                await refresh_profiles(self.memory, self.llm, self.store, chat_id)
+                await refresh_profiles(self.memory, self.llm, self.store, chat_id, locked=self._locked)
 
     async def learn_loop(self, every_s: float = 60.0) -> None:
         while True:
@@ -255,7 +256,7 @@ class Botucha:
         n = import_export(self.store, export)
         log.info("imported %d messages from export", n)
         await self.memory.index_new_chunks(chat_id, force=True)
-        await learn_once(self.memory, self.llm, chat_id)
-        await refresh_profiles(self.memory, self.llm, self.store, chat_id)
+        await learn_once(self.memory, self.llm, chat_id, locked=self._locked)
+        await refresh_profiles(self.memory, self.llm, self.store, chat_id, locked=self._locked)
         self.store.set_state(f"learned_rowid:{chat_id}", str(self.store.last_rowid(chat_id)))
         self.store.set_state("export_imported", "1")

@@ -57,7 +57,8 @@ def resolve_member(about: str | None, store: Store) -> int | None:
     return None
 
 
-async def learn_once(memory: Memory, llm: LLM, chat_id: int, *, source: str = "auto") -> int:
+async def learn_once(memory: Memory, llm: LLM, chat_id: int, *, source: str = "auto",
+                     locked: frozenset[int] = frozenset()) -> int:
     key = f"learn_cursor:{chat_id}"
     cursor = int(memory.store.get_state(key, "0"))
     new = memory.chunks_after(chat_id, cursor)
@@ -72,7 +73,10 @@ async def learn_once(memory: Memory, llm: LLM, chat_id: int, *, source: str = "a
         return 0
     n = 0
     for about, fact in ext.facts:
-        await memory.upsert_fact("fact", fact, resolve_member(about, memory.store), source)
+        uid = resolve_member(about, memory.store)
+        if uid in locked:
+            continue  # owner keeps this member's memory by hand
+        await memory.upsert_fact("fact", fact, uid, source)
         n += 1
     for word, meaning in ext.slang:
         await memory.upsert_fact("slang", f"{word.lower()} = {meaning}", None, source)
@@ -86,8 +90,11 @@ def profiles_due(store: Store, chat_id: int, every: int = 200) -> bool:
     return store.last_rowid(chat_id) - done >= every
 
 
-async def refresh_profiles(memory: Memory, llm: LLM, store: Store, chat_id: int) -> None:
+async def refresh_profiles(memory: Memory, llm: LLM, store: Store, chat_id: int,
+                           locked: frozenset[int] = frozenset()) -> None:
     for uid, member in sorted(store.members().items()):
+        if uid in locked:
+            continue
         rows = store.conn.execute(
             "SELECT name, text FROM messages WHERE chat_id=? AND user_id=? AND text != '' "
             "ORDER BY rowid DESC LIMIT 50", (chat_id, uid)).fetchall()
