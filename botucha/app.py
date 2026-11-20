@@ -31,6 +31,7 @@ HISTORY_N = 40
 BOT_NAME = "Botucha"
 COMMAND_FAILED = "nepavyko, pabandyk veliau"
 TG_LIMIT = 4000
+FEEDBACK_ALIASES = {"geras": "gerai", "blogas": "blogai"}
 
 
 @dataclass
@@ -126,6 +127,7 @@ class Botucha:
                 if name == "kaina":
                     await self._command_price(m, args)
                     return
+                name = FEEDBACK_ALIASES.get(name, name)
                 if name in ("gerai", "blogai", "pataisyk"):
                     await self._command_feedback(m, name, args)
                     return
