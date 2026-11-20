@@ -1,0 +1,13 @@
+{
+ "name": "test grupe",
+ "type": "private_supergroup",
+ "id": 1234567890,
+ "messages": [
+  {"id": 10, "type": "message", "date": "2026-11-19T20:00:00", "date_unixtime": "1795111200", "from": "Tadas", "from_id": "user111", "text": "parduok savo spx", "text_entities": []},
+  {"id": 11, "type": "message", "date": "2026-11-19T20:00:10", "date_unixtime": "1795111210", "from": "rowhammer", "from_id": "user100000001", "text": ["ziurek ", {"type": "link", "text": "https://example.com"}], "text_entities": []},
+  {"id": 12, "type": "message", "date": "2026-11-19T20:00:20", "date_unixtime": "1795111220", "from": "Tadas", "from_id": "user111", "photo": "photos/p.jpg", "width": 1, "height": 1, "text": "", "text_entities": []},
+  {"id": 13, "type": "service", "date": "2026-11-19T20:00:30", "date_unixtime": "1795111230", "actor": "Tadas", "actor_id": "user111", "action": "pin_message", "text": "", "text_entities": []},
+  {"id": 14, "type": "message", "date": "2026-11-19T20:00:40", "date_unixtime": "1795111240", "from": "mantas", "from_id": "user222", "reply_to_message_id": 10, "text": "nua na xdd", "text_entities": []},
+  {"id": 15, "type": "message", "date": "2026-11-19T20:00:50", "date_unixtime": "1795111250", "from": "mantas", "from_id": "user222", "text": "jo siaip", "text_entities": []}
+ ]
+}
