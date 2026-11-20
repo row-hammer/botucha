@@ -13,3 +13,4 @@ __pycache__/
 .pytest_cache/
 style_examples.txt
 config.toml
+botucha.log

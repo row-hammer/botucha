@@ -188,3 +188,12 @@ async def test_foreign_chat_logged_once(app, caplog):
     await bot.on_message(inc("y", chat=-42, msg_id=2))
     hits = [r for r in caplog.records if "-42" in r.getMessage()]
     assert len(hits) == 1
+
+
+async def test_private_chat_always_direct(app):
+    bot, _, _, out = await app(["labas tau"])
+    dm = 100000001
+    bot.cfg = dataclasses.replace(bot.cfg, telegram=dataclasses.replace(bot.cfg.telegram, chat_ids=(C, dm)))
+    await bot.on_message(inc("labas", chat=dm, user=dm))
+    await settle()
+    assert [t for _, t, _ in out.sent] == ["labas tau"]

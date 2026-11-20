@@ -127,8 +127,9 @@ class Botucha:
                         self.last_error = f"send: {e}"
                 return
 
-        direct = is_direct(m.text, reply_to_bot=m.reply_to_bot, mentions_bot=m.mentions_bot,
-                           name_regex=self.cfg.telegram.bot_name_regex)
+        direct = m.chat_id > 0 or is_direct(  # positive chat id = private chat: always talking to him
+            m.text, reply_to_bot=m.reply_to_bot, mentions_bot=m.mentions_bot,
+            name_regex=self.cfg.telegram.bot_name_regex)
         decision = decide(m.text, sender_is_bot=own, direct=direct, started_at=self.started_at, msg_ts=m.ts,
                           now=now, state=self.state, cfg=self.cfg.trigger, rng=self.rng)
         if decision is Decision.REPLY:
