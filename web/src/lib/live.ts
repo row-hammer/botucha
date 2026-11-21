@@ -37,7 +37,6 @@ export function startLive(): void {
     }
   });
   source.addEventListener("status", (e) => useLive.setState({ status: JSON.parse((e as MessageEvent).data) }));
-  source.addEventListener("status", (e) => useLive.setState({ status: JSON.parse((e as MessageEvent).data) }));
   source.addEventListener("progress", onProgress);
   source.addEventListener("trace", (e) => {
     const t = JSON.parse((e as MessageEvent).data) as TraceSummary;
