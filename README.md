@@ -324,6 +324,24 @@ If both attempts have odd words, the cleaner one is sent rather than nothing. Li
 member (`Name: …`) or with chat-format labels are dropped. Direct calls that still fail get a short canned
 line; uninvited replies stay silent.
 
+### Claude proofreading (`proofread.py`, optional)
+
+When attempt 1 fails **only** the spell check, Botucha can ask Claude (Anthropic API) about the flagged words
+instead of regenerating locally. Claude gets the draft reply and the flagged words, nothing else: no chat
+history, no member messages, no persona. It answers per word with structured JSON: `keep` (real word, name,
+slang) or a replacement of one to three words. Botucha applies the replacements itself and runs every filter
+again, so Claude cannot rewrite the reply. If Claude is off, out of budget, refuses or fails, the local second
+attempt runs as before.
+
+Every verdict is stored (`spell_fixes`). The most frequent fixes go into the prompt as spelling notes
+("nužvelgei (ne nužvalgai)"), and words Claude judged real can be approved on the dashboard's Quality page as
+known words, so the spell check stops flagging them. Both keep working after Claude is switched off.
+
+It is off unless `[claude] enabled = true` and `ANTHROPIC_API_KEY` is in `.env`. It switches itself off after
+`until`, stops for the day at `daily_limit` calls, and has an on/off switch on the Quality page. It uses
+`claude-opus-5-5` at low effort with refusal fallbacks enabled; at a few dozen flagged drafts a day it costs
+cents per day.
+
 ### Prices (`prices.py`)
 
 Names map to Yahoo symbols (`spx` → `^GSPC`, `vwce` → `VWCE.DE`, `nvidi…` → `NVDA`, `btc` → `BTC-USD`, …);
@@ -364,6 +382,7 @@ vision, photos are kept as text only.
 | `model.num_ctx` / `num_predict` | 32768 / 150 | context size / max reply tokens (`/rimtai` uses at least 450) |
 | `model.keep_alive` | `30m` | how long Ollama keeps the model loaded |
 | `model.temperature` | 0.7 | lower = fewer invented words, higher = more random humor |
+| `model.min_p` | 0.05 | drops unlikely tokens, which cuts invented words (0 = off) |
 | `trigger.keywords` | spx, vwce, akcij, … | word prefixes for uninvited replies |
 | `trigger.keyword_prob` | 0.5 | chance to reply on a keyword |
 | `trigger.random_n` | 25 | random reply 1 in n messages (`/daznis` changes it) |
@@ -375,8 +394,10 @@ vision, photos are kept as text only.
 | `paths.*` | | database, persona, style examples, optional export |
 | `memory.locked_members` | [] | user IDs whose memory you keep by hand |
 | `prices.enabled` / `prices.aliases` | true / {} | live prices, extra `stem = SYMBOL` names |
+| `claude.enabled` / `until` / `daily_limit` / `model` | false / – / 100 / `claude-opus-5-5` | optional Claude proofreading of flagged drafts |
 
-The token is read from `.env` (`BOTUCHA_TOKEN`), never from `config.toml`.
+The tokens are read from `.env` (`BOTUCHA_TOKEN`, and `ANTHROPIC_API_KEY` for proofreading), never from
+`config.toml`.
 
 ## Making the persona yours
 
@@ -416,7 +437,8 @@ The report flags replies that are empty, too long (except `/rimtai`) or written 
   `persona.md`, `style_examples.txt`, `eval/out/` and `backups/` are git-ignored and created with private
   permissions.
 - **Leaves the PC:** Telegram sees the messages, as with any bot. Yahoo Finance sees the tickers he looks
-  up. Nothing else.
+  up. With Claude proofreading enabled, Anthropic sees Botucha's own flagged draft replies and the flagged
+  words (never the chat history). Nothing else.
 - **Retention:** he keeps every message in his database. A Telegram auto-delete timer removes messages from
   Telegram, **not** from his memory. Tell your group.
 - `/ka_zinai` shows anyone what is stored about them; `/pamirsk` deletes a fact.
