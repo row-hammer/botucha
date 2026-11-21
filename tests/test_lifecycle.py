@@ -72,3 +72,13 @@ async def test_a_cancelled_loop_is_not_a_failure():
     await asyncio.gather(task, return_exceptions=True)
     await asyncio.sleep(0)
     assert stopped == []
+
+
+def test_units_do_not_wait_for_system_units_they_cannot_see():
+    """A user service cannot order itself after system units (Ollama runs as one); those lines did nothing."""
+    from pathlib import Path
+    for name in ("botucha.service", "botucha-web.service"):
+        unit = (Path(__file__).parent.parent / "deploy" / name).read_text()
+        deps = [l for l in unit.splitlines() if l.startswith(("After=", "Wants=", "Requires="))]
+        assert not any(("ollama" in l or "network-online" in l) for l in deps), (name, deps)
+        assert "Restart=on-failure" in unit

@@ -1,7 +1,8 @@
 [Unit]
 Description=Botucha Telegram bot
-After=network-online.target ollama.service
-Wants=network-online.target
+# Ollama and the network are system units, which a user unit cannot wait for. The bot copes instead:
+# no Telegram at start = it exits and is restarted every 10 s; no Ollama = replies wait, vision is
+# rechecked every 5 minutes.
 
 [Service]
 Type=simple

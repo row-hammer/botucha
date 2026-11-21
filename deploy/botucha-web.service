@@ -1,6 +1,6 @@
 [Unit]
 Description=Botucha local web dashboard (127.0.0.1:8765)
-After=network-online.target botucha.service
+After=botucha.service
 
 [Service]
 Type=simple
