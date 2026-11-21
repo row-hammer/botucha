@@ -11,7 +11,8 @@
     "ratings": "Įvertinimai",
     "controls": "Valdymas",
     "settings": "Persona ir nustatymai",
-    "pipeline": "Eiga"
+    "pipeline": "Eiga",
+    "quality": "Kokybė"
   },
   "common": {
     "language": "Kalba",
@@ -380,6 +381,54 @@
       "error": "{n} bandymas: modelio klaida",
       "rejected": "{n} bandymas: {check}",
       "rejectedAny": "{n} bandymas: atmestas"
+    }
+  },
+  "quality": {
+    "replies": "Atsakymai",
+    "words": {
+      "title": "Rašybos tikrinimo pažymėti žodžiai",
+      "hint": "Nėra lietuvių kalbos žodyne ar grupės žodžiuose. Čia patenka ir tikros klaidos, ir jūsų slengas.",
+      "word": "Žodis",
+      "n": "Kartai",
+      "replies": "Atsakymai",
+      "last": "Paskutinį kartą"
+    },
+    "context": {
+      "title": "Konteksto lango užimtumas",
+      "hint": "Pirmo bandymo užklausos dydis, palyginti su modelio langu.",
+      "p50": "Įprastas (mediana)",
+      "p95": "Didelis (95-asis procentilis)",
+      "max": "Didžiausias",
+      "tokens": "{n} žetonų",
+      "history": "žinučių kontekste",
+      "facts": "faktų atsakymui",
+      "chunks": "senų pokalbių atsakymui",
+      "limit": "Langas: {n} žetonų (num_ctx)."
+    },
+    "attempts": {
+      "title": "Bandymų atsakymui",
+      "n": "bandymų: {n}"
+    },
+    "triggers": {
+      "title": "Kas paskatino atsakyti",
+      "keyword": "raktažodis",
+      "random": "atsitiktinai",
+      "unknown": "nežinoma"
+    },
+    "people": {
+      "title": "Pagal žmogų",
+      "hint": "Botuchos atsakymai kiekvienam žmogui ir jų įvertinimai.",
+      "name": "Žmogus",
+      "runs": "Paleidimai",
+      "sent": "Be klaidų",
+      "fallback": "Atsarginiai",
+      "silent": "Nutylėjo",
+      "median": "Laiko mediana"
+    },
+    "activity": {
+      "title": "Kada grupė aktyvi",
+      "hint": "Narių žinutės pagal savaitės dieną ir valandą (šio kompiuterio laiko juosta).",
+      "cell": "{day} {h}:00 · žinučių: {n}"
     }
   }
 }

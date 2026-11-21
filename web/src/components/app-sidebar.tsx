@@ -8,6 +8,7 @@ import {
   Network,
   Settings2,
   SlidersHorizontal,
+  SpellCheck,
   Workflow,
 } from "lucide-react";
 import Link from "next/link";
@@ -32,6 +33,7 @@ import { useLive } from "@/lib/live";
 export const NAV = [
   { href: "/", key: "overview", icon: Gauge },
   { href: "/pipeline/", key: "pipeline", icon: Workflow },
+  { href: "/quality/", key: "quality", icon: SpellCheck },
   { href: "/thinking/", key: "thinking", icon: Activity },
   { href: "/memory/", key: "memory", icon: Brain },
   { href: "/people/", key: "people", icon: Network },

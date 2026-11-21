@@ -130,3 +130,32 @@ export interface Progress {
   steps: number;
   last: { kind: string; name: string | null; status: StepStatus };
 }
+
+export interface QualityPerson {
+  name: string;
+  runs: number;
+  sent: number;
+  fallback: number;
+  silent: number;
+  median_ms: number | null;
+  good: number;
+  bad: number;
+}
+
+export interface Quality {
+  words: { word: string; n: number; traces: number; last: number; trace_id: number }[];
+  attempts: Record<string, number>;
+  triggers: Record<string, number>;
+  people: QualityPerson[];
+  context: {
+    limit: number;
+    p50: number | null;
+    p95: number | null;
+    max: number | null;
+    replies: number;
+    facts: number | null;
+    chunks: number | null;
+    history: number | null;
+  };
+  activity: number[][]; // [weekday Mon=0][hour] -> messages
+}

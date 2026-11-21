@@ -11,7 +11,8 @@
     "ratings": "Ratings",
     "controls": "Controls",
     "settings": "Persona & Settings",
-    "pipeline": "Pipeline"
+    "pipeline": "Pipeline",
+    "quality": "Quality"
   },
   "common": {
     "language": "Language",
@@ -380,6 +381,54 @@
       "error": "Attempt {n}: model error",
       "rejected": "Attempt {n}: {check}",
       "rejectedAny": "Attempt {n}: rejected"
+    }
+  },
+  "quality": {
+    "replies": "Replies",
+    "words": {
+      "title": "Words the spell check flagged",
+      "hint": "Not in the Lithuanian dictionary or the group's own words. Real mistakes and your slang both land here.",
+      "word": "Word",
+      "n": "Times",
+      "replies": "Replies",
+      "last": "Last seen"
+    },
+    "context": {
+      "title": "Context window use",
+      "hint": "Prompt size of the first attempt, against the model's window.",
+      "p50": "Typical (median)",
+      "p95": "Large (95th percentile)",
+      "max": "Largest",
+      "tokens": "{n} tokens",
+      "history": "messages in context",
+      "facts": "facts per reply",
+      "chunks": "old chats per reply",
+      "limit": "Window: {n} tokens (num_ctx)."
+    },
+    "attempts": {
+      "title": "Attempts per reply",
+      "n": "{n} attempt(s)"
+    },
+    "triggers": {
+      "title": "What made him reply",
+      "keyword": "keyword",
+      "random": "random",
+      "unknown": "unknown"
+    },
+    "people": {
+      "title": "Per person",
+      "hint": "Replies Botucha wrote to each person, and how they were rated.",
+      "name": "Person",
+      "runs": "Runs",
+      "sent": "Sent clean",
+      "fallback": "Fallback",
+      "silent": "Silent",
+      "median": "Median time"
+    },
+    "activity": {
+      "title": "When the group is active",
+      "hint": "Messages from members per weekday and hour (this PC's time zone).",
+      "cell": "{day} {h}:00 · {n} messages"
     }
   }
 }

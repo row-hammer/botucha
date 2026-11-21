@@ -12,6 +12,7 @@ from fastapi.responses import StreamingResponse
 from ..store import Store
 from .metrics import Range, compute_metrics
 from .pipeline import compute_pipeline, traces_on_path
+from .quality import compute_quality
 from .routes_status import status_body
 
 router = APIRouter()
@@ -103,6 +104,12 @@ async def metrics(request: Request, range: Range = "24h") -> dict:  # noqa: A002
 async def pipeline(request: Request, range: Range = "24h") -> dict:  # noqa: A002  (query parameter name)
     deps = request.app.state.deps
     return compute_pipeline(deps.store, deps.clock(), range)
+
+
+@router.get("/api/quality")
+async def quality(request: Request, range: Range = "7d") -> dict:  # noqa: A002  (query parameter name)
+    deps = request.app.state.deps
+    return compute_quality(deps.store, deps.clock(), range, num_ctx=deps.cfg.model.num_ctx)
 
 
 def _event(name: str, data: object) -> str:
