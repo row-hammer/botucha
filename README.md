@@ -52,7 +52,7 @@ is offline.
 |---|---|---|
 | everyone | `/isimink <tekstas>` | store a fact |
 | everyone | `/slengas <zodis> = <reiksme>` | teach slang |
-| everyone | `/ka_zinai [@vardas]` | what he knows about someone (with fact numbers) |
+| everyone | `/ka_zinai [@vardas arba pravardė]` | what he knows about someone, members or friends outside the group (`/ka_zinai petras`), with fact numbers and who they are linked to |
 | everyone | `/atsimeni <ko ieskot>` | find an old conversation, with links |
 | everyone | `/rimtai <klausimas>` or "rimtai" in a message to him | a straight answer |
 | everyone | `/kaina <tickeris>` | current price from Yahoo, e.g. `/kaina nvda`, `/kaina btc`, `/kaina $ASML` (no model, instant) |
@@ -63,6 +63,7 @@ is offline.
 | admin | `/daznis <n>` | uninvited replies ~1 in n messages (default 25) |
 | admin | `/isjunk`, `/ijunk` | off / on |
 | admin | `/statusas` | model, memory, uptime, last error |
+| admin | `/zmogus Vardas = pravardė1, pravardė2` | add a person (with word forms, e.g. `petras, petro, petrui`); facts mentioning them get linked |
 | admin | `/ivertinimai` | good/bad totals and the last 10 bad replies with reasons |
 
 He always answers when mentioned, replied to, or called "botucha"; sometimes on keywords (spx, vwce,

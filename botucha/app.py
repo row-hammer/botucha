@@ -115,6 +115,7 @@ class Botucha:
                                              m.reply_to, own))
         if not own:
             self.store.upsert_member(m.user_id, m.name, m.username)
+            self.memory.ensure_member_person(m.user_id, m.name, m.username)
         self.worker.activity()
         now = self.clock()
 
@@ -284,7 +285,7 @@ class Botucha:
             ctx = PromptContext(
                 persona=_read(self.cfg.paths.persona), style_examples=_read(self.cfg.paths.style_examples),
                 profiles={members[u].name: p for u, p in self.memory.profiles().items() if u in members},
-                slang=self.memory.all_slang(),
+                slang=self.memory.all_slang(), people=self.memory.people_lines(),
                 chunks=[h.chunk.text for h in hits], facts=[f.text for f in facts], history=history,
                 bot_user_id=self.bot_user_id, serious=any(j.serious for j in jobs))
             if self.prices:

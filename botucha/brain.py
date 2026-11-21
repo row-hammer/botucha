@@ -39,6 +39,7 @@ class PromptContext:
     bot_user_id: int
     serious: bool = False
     prices: list[str] = field(default_factory=list)
+    people: list[str] = field(default_factory=list)
 
 
 def _system(ctx: PromptContext) -> str:
@@ -50,6 +51,8 @@ def _system(ctx: PromptContext) -> str:
         parts.append("Kaip grupe raso (tikri pavyzdziai):\n" + ctx.style_examples.strip())
     if ctx.profiles:
         parts.append("Grupes nariai:\n" + "\n".join(f"- {n}: {p}" for n, p in ctx.profiles.items()))
+    if ctx.people:
+        parts.append("Žmonės ir ryšiai (kas yra kas ir kaip susiję):\n" + "\n".join(f"- {p}" for p in ctx.people))
     if ctx.slang:
         parts.append("Slengas:\n" + "\n".join(ctx.slang))
     if ctx.chunks:

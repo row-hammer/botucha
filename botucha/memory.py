@@ -31,6 +31,14 @@ class Fact:
 
 
 @dataclass
+class Person:
+    id: int
+    name: str
+    aliases: list[str]
+    user_id: int | None
+
+
+@dataclass
 class ChunkHit:
     chunk: Chunk
     score: float
@@ -124,6 +132,8 @@ class Memory:
             "INSERT INTO facts (kind, text, about, source, created, updated, emb) VALUES (?,?,?,?,?,?,?)",
             (kind, text, about, source, now, now, _blob(emb)))
         self.db.execute("INSERT INTO facts_fts (rowid, text) VALUES (?,?)", (cur.lastrowid, text))
+        if kind == "fact":
+            self._link(cur.lastrowid, text, about)
         self.db.commit()
         return cur.lastrowid
 
@@ -132,6 +142,9 @@ class Memory:
         self.db.execute("UPDATE facts SET text=?, emb=?, updated=? WHERE id=?",
                         (text, _blob(emb), self.clock(), fact_id))
         self.db.execute("INSERT INTO facts_fts (rowid, text) VALUES (?,?)", (fact_id, text))
+        r = self.db.execute("SELECT kind, about FROM facts WHERE id=?", (fact_id,)).fetchone()
+        if r and r[0] == "fact":
+            self._link(fact_id, text, r[1])
         self.db.commit()
 
     async def upsert_fact(self, kind: FactKind, text: str, about: int | None, source: str) -> tuple[int, bool]:
@@ -156,6 +169,7 @@ class Memory:
             return False
         self.db.execute("INSERT INTO facts_fts (facts_fts, rowid, text) VALUES ('delete', ?, ?)", (fact_id, r[0]))
         self.db.execute("DELETE FROM facts WHERE id=?", (fact_id,))
+        self.db.execute("DELETE FROM fact_people WHERE fact_id=?", (fact_id,))
         self.db.commit()
         return True
 
@@ -195,6 +209,93 @@ class Memory:
             if cur is None or rank > (cur.source.startswith("cmd:"), cur.updated, cur.id):
                 best[key] = f
         return [f.text for f in sorted(best.values(), key=lambda f: f.id)][:limit]
+
+    # ---- people: members and friends outside the group -----------------------
+    def _people_rows(self, where: str = "", args: tuple = ()) -> list[Person]:
+        rows = self.db.execute(f"SELECT id, name, aliases, user_id FROM people {where} ORDER BY id", args)
+        return [Person(r[0], r[1], [a for a in r[2].split(",") if a], r[3]) for r in rows]
+
+    def people(self) -> list[Person]:
+        return self._people_rows()
+
+    def add_person(self, name: str, aliases: list[str], user_id: int | None = None) -> int:
+        """Add a person (or merge aliases into an existing one) and relink all facts."""
+        clean = [a.strip().lower() for a in aliases if a.strip()]
+        cur = self._people_rows("WHERE name=?", (name,))
+        if cur:
+            merged = list(dict.fromkeys(cur[0].aliases + clean))
+            self.db.execute("UPDATE people SET aliases=?, user_id=COALESCE(?, user_id) WHERE id=?",
+                            (",".join(merged), user_id, cur[0].id))
+            pid = cur[0].id
+        else:
+            pid = self.db.execute("INSERT INTO people (name, aliases, user_id) VALUES (?,?,?)",
+                                  (name, ",".join(dict.fromkeys(clean)), user_id)).lastrowid
+        self.relink_all()
+        return pid
+
+    def ensure_member_person(self, user_id: int, name: str, username: str | None) -> None:
+        if not self._people_rows("WHERE user_id=?", (user_id,)):
+            self.add_person(name, [username] if username else [], user_id)
+
+    @staticmethod
+    def _terms(p: Person) -> list[list[str]]:
+        from .trigger import fold
+        return [re.findall(r"\w+", fold(t)) for t in [p.name, *p.aliases] if t]
+
+    def people_in(self, text: str) -> list[Person]:
+        """People whose name or listed word form appears as whole words, in order of appearance."""
+        from .trigger import fold
+        words = re.findall(r"\w+", fold(text))
+        found: list[tuple[int, Person]] = []
+        for p in self.people():
+            pos = [i for term in self._terms(p) for i in range(len(words) - len(term) + 1)
+                   if term and words[i:i + len(term)] == term]
+            if pos:
+                found.append((min(pos), p))
+        return [p for _, p in sorted(found, key=lambda x: (x[0], x[1].id))]
+
+    def find_person(self, alias: str) -> Person | None:
+        hits = self.people_in(alias.lstrip("@"))
+        return hits[0] if hits else None
+
+    def _link(self, fact_id: int, text: str, about: int | None) -> None:
+        self.db.execute("DELETE FROM fact_people WHERE fact_id=?", (fact_id,))
+        ids = {p.id for p in self.people_in(text)}
+        if about is not None:
+            ids |= {p.id for p in self._people_rows("WHERE user_id=?", (about,))}
+        self.db.executemany("INSERT INTO fact_people (fact_id, person_id) VALUES (?,?)", [(fact_id, i) for i in ids])
+
+    def relink_all(self) -> None:
+        for fid, text, about in self.db.execute("SELECT id, text, about FROM facts WHERE kind='fact'").fetchall():
+            self._link(fid, text, about)
+        self.db.commit()
+
+    def people_of_fact(self, fact_id: int) -> list[Person]:
+        return self._people_rows("WHERE id IN (SELECT person_id FROM fact_people WHERE fact_id=?)", (fact_id,))
+
+    def person_facts(self, person_id: int) -> list[Fact]:
+        return self._facts("WHERE id IN (SELECT fact_id FROM fact_people WHERE person_id=?)", (person_id,))
+
+    def related(self, person_id: int) -> list[Person]:
+        """Other people sharing facts with this one, most shared first."""
+        rows = self.db.execute(
+            "SELECT b.person_id, COUNT(*) n FROM fact_people a JOIN fact_people b ON a.fact_id=b.fact_id "
+            "WHERE a.person_id=? AND b.person_id!=? GROUP BY b.person_id ORDER BY n DESC, b.person_id",
+            (person_id, person_id)).fetchall()
+        by_id = {p.id: p for p in self.people()}
+        return [by_id[r[0]] for r in rows if r[0] in by_id]
+
+    def people_lines(self, max_facts: int = 6) -> list[str]:
+        """One line per person with facts: 'Name (aliases): fact; fact. Susiję: A, B'."""
+        lines = []
+        for p in self.people():
+            facts = [f.text.rstrip(".") for f in self.person_facts(p.id)][:max_facts]
+            rel = [r.name for r in self.related(p.id)]
+            if not facts:
+                continue
+            head = p.name + (f" ({', '.join(p.aliases[:3])})" if p.aliases else "")
+            lines.append(f"{head}: {'; '.join(facts)}." + (f" Susiję: {', '.join(rel)}" if rel else ""))
+        return lines
 
     # ---- profiles -------------------------------------------------------
     def set_profile(self, user_id: int, text: str) -> None:

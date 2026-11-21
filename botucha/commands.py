@@ -12,7 +12,7 @@ from .memory import Memory
 from .store import Store
 from .trigger import TriggerState
 
-ADMIN_ONLY = {"pamirsk", "taisyk", "daznis", "isjunk", "ijunk", "statusas", "ivertinimai"}
+ADMIN_ONLY = {"pamirsk", "taisyk", "daznis", "isjunk", "ijunk", "statusas", "ivertinimai", "zmogus"}
 NOT_ADMIN = "tik bosas gali"
 
 
@@ -85,7 +85,15 @@ async def handle_command(name: str, args: str, sender_id: int, now: float, ctx: 
     if name == "ka_zinai":
         uid = resolve_member(args, store) if args else sender_id
         if uid is None:
-            return "tokio nepazistu"
+            person = mem.find_person(args)
+            if person is None:
+                return "tokio nepazistu"
+            lines = [person.name + (f" ({', '.join(person.aliases[:3])})" if person.aliases else "") + ":"]
+            lines += [f"#{f.id} {f.text}" for f in mem.person_facts(person.id)]
+            rel = [r.name for r in mem.related(person.id)]
+            if rel:
+                lines.append("susiję: " + ", ".join(rel))
+            return "\n".join(lines) if len(lines) > 1 else f"apie {person.name} nieko nezinau"
         member = store.members().get(uid)
         lines = [f"{member.name if member else uid}:"]
         profile = mem.profiles().get(uid)
@@ -93,6 +101,14 @@ async def handle_command(name: str, args: str, sender_id: int, now: float, ctx: 
             lines.append(profile)
         lines += [f"#{f.id} {f.text}" for f in mem.facts_about(uid)]
         return "\n".join(lines) if len(lines) > 1 else "apie ji nieko nezinau"
+
+    if name == "zmogus":
+        who, sep, aliases = args.partition("=")
+        if not who.strip():
+            return "naudok: /zmogus Vardas = pravarde1, pravarde2"
+        mem.add_person(who.strip(), aliases.split(",") if sep else [])
+        p = mem.find_person(who.strip())
+        return f"ok: {p.name} ({', '.join(p.aliases)}), susietų faktų: {len(mem.person_facts(p.id))}"
 
     if name == "tyla":
         minutes = _int(args) if args else ctx.cfg.trigger.tyla_default_min

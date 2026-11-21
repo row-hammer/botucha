@@ -17,7 +17,7 @@ BOT_LINE_PREFIX = "Botucha:"
 EXTRACT_PROMPT = (
     "Tu skaitai lietuviu draugu Telegram grupes pokalbi. Isrink NAUJUS faktus apie grupes narius "
     "(kuo investuoja, ka dirba, iprociai, vidiniai bajeriai, kas ka sake svarbaus) ir slengo zodzius su ju "
-    "reiksmemis. Faktus rasyk trumpai, vienu sakiniu, lietuviskai. Jei nieko naujo nera, grazink tuscius "
+    "reiksmemis. Faktus rasyk trumpai, vienu sakiniu, lietuviskai, ir kiekviena fakta pradek zmogaus vardu. Jei nieko naujo nera, grazink tuscius "
     "sarasus. Atsakyk TIK JSON: "
     '{"facts": [{"about": "nario vardas arba null", "text": "faktas"}], '
     '"slang": [{"word": "zodis", "meaning": "reiksme"}]}'
@@ -82,6 +82,9 @@ async def learn_once(memory: Memory, llm: LLM, chat_id: int, *, source: str = "a
             log.warning("learning: skipped instruction-like fact: %.80s", fact)
             continue
         uid = resolve_member(about, memory.store)
+        person = memory.find_person(about) if about and uid is None else None
+        if person and person.id not in {p.id for p in memory.people_in(fact)}:
+            fact = f"{person.name} – {fact[:1].lower()}{fact[1:]}"  # keep who it is about inside the text
         if uid in locked:
             continue  # owner keeps this member's memory by hand
         await memory.upsert_fact("fact", fact, uid, source)
