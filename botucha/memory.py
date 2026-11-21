@@ -16,6 +16,7 @@ from .store import Store
 
 GAP_S = 1800
 DEDUPE_COS = 0.88
+RRF_K = 60  # reciprocal rank fusion constant: the usual value, rank 1 is worth little more than rank 5
 EMBED_BATCH = 32  # chunks per embedding request: a few seconds on CPU, far from the client timeout
 FactKind = Literal["fact", "slang"]
 
@@ -124,27 +125,34 @@ class Memory:
 
     async def _hybrid(self, table: str, query: str, k: int, where: str = "",
                       args: tuple = ()) -> list[tuple[int, float, bool]]:
-        """FTS top 10 ∪ cosine top 10, ranked by cosine. Returns (id, cosine, matched by FTS)."""
+        """Meaning and words together: the cosine ranking and the FTS (word match) ranking are merged by
+        reciprocal rank fusion, so a chunk holding the one rare word asked about can win over chunks that are
+        merely about the same kind of thing. Returns (id, cosine, matched by FTS), best first."""
         q = (await self.embedder.embed([query]))[0]
         rows = self.db.execute(f"SELECT id, emb FROM {table} {where}", args).fetchall()
         if not rows:
             return []
         ids = [r[0] for r in rows]
-        mat = np.stack([_vec(r[1]) for r in rows])
-        scores = mat @ q
-        cand = {ids[i] for i in np.argsort(-scores)[:10]}
-        fts: set[int] = set()
+        scores = np.stack([_vec(r[1]) for r in rows]) @ q
+        by_cosine = [ids[i] for i in np.argsort(-scores)]
+        allowed = set(ids)
+        by_words: list[int] = []
         fq = fts_query(query)
         if fq:
-            try:
-                hits = self.db.execute(
-                    f"SELECT rowid FROM {table}_fts WHERE {table}_fts MATCH ? ORDER BY rank LIMIT 10", (fq,))
-                fts = {r[0] for r in hits if r[0] in set(ids)}
+            try:  # bm25 order; rows outside the filter (another chat, the visible transcript) do not count
+                hits = self.db.execute(f"SELECT rowid FROM {table}_fts WHERE {table}_fts MATCH ? ORDER BY rank "
+                                       f"LIMIT ?", (fq, 10 + 4 * k + len(ids) // 50))
+                by_words = [r[0] for r in hits if r[0] in allowed][:10]
             except Exception:
                 pass
-        cand |= fts
+        fused: dict[int, float] = {}
+        for ranking in (by_cosine, by_words):
+            for rank, i in enumerate(ranking):
+                fused[i] = fused.get(i, 0.0) + 1.0 / (RRF_K + rank + 1)
         score_of = dict(zip(ids, scores.tolist()))
-        return sorted(((i, score_of[i], i in fts) for i in cand), key=lambda x: -x[1])[:k]
+        words = set(by_words)
+        best = sorted(fused, key=lambda i: (-fused[i], -score_of[i]))[:k]
+        return [(i, score_of[i], i in words) for i in best]
 
     # ---- facts and slang --------------------------------------------------
     async def add_fact(self, kind: FactKind, text: str, about: int | None, source: str) -> int:
@@ -399,9 +407,19 @@ class Memory:
     def profiles(self) -> dict[int, str]:
         return {r[0]: r[1] for r in self.db.execute("SELECT user_id, text FROM profiles")}
 
-    async def search_chunks(self, query: str, k: int = 3, chat_id: int | None = None) -> list[ChunkHit]:
+    async def search_chunks(self, query: str, k: int = 3, chat_id: int | None = None,
+                            before_msg_id: int | None = None) -> list[ChunkHit]:
+        """before_msg_id: only chunks that end before this message (the oldest one still in view), so a reply
+        is not handed back what its own transcript already shows."""
         out = []
-        where, args = ("WHERE chat_id=?", (chat_id,)) if chat_id is not None else ("", ())
+        cond, args = [], []
+        if chat_id is not None:
+            cond.append("chat_id=?")
+            args.append(chat_id)
+        if before_msg_id is not None:
+            cond.append("last_msg_id<?")
+            args.append(before_msg_id)
+        where, args = ("WHERE " + " AND ".join(cond) if cond else ""), tuple(args)
         for cid, score, fts in await self._hybrid("chunks", query, k, where, args):
             r = self.db.execute("SELECT chat_id, first_msg_id, last_msg_id, start_ts, end_ts, text "
                                 "FROM chunks WHERE id=?", (cid,)).fetchone()

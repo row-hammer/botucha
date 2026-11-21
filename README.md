@@ -288,7 +288,9 @@ Everything lives in `botucha.db`:
 | `feedback`, `corrections` | ratings and better versions of his replies |
 | `state` | cursors and persisted settings |
 
-Search is hybrid: FTS5 top 10 ∪ cosine top 10, ranked by cosine. `bge-m3` runs on CPU (`num_gpu: 0`) so it
+Search is hybrid: the cosine ranking and the FTS5 word-match ranking are merged by reciprocal rank fusion, so
+a conversation holding a rare word you ask about is found even when others are closer in meaning. A reply
+never gets back chunks that its own transcript already shows (`/atsimeni` still links them). `bge-m3` runs on CPU (`num_gpu: 0`) so it
 never competes with the chat model for VRAM. A recall phrase ("atsimeni", "pamenat", …) or `/atsimeni`
 retrieves more chunks. New chunks are embedded 32 at a time and saved after each request; a reply indexes one
 request's worth at most and leaves a backlog to the learning loop. If the embedding model is down he still

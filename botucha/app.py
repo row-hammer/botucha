@@ -435,7 +435,10 @@ class Botucha:
             with run.step("retrieval") as st:
                 scored = []
                 try:
-                    hits = await self.memory.search_chunks(query, k=6 if recall else 3, chat_id=chat_id) if query else []
+                    # what the transcript already shows is not memory; /atsimeni still links it, as asked
+                    oldest = None if links else min((m.msg_id for m in recent), default=None)
+                    hits = await self.memory.search_chunks(query, k=6 if recall else 3, chat_id=chat_id,
+                                                           before_msg_id=oldest) if query else []
                     scored = await self.memory.search_facts_scored(query, k=5) if query else []
                 except Exception as e:  # the embedding model is down: an answer without memory beats no answer
                     log.warning("memory search failed, replying without it: %s", e)
