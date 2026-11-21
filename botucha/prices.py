@@ -6,6 +6,7 @@ import logging
 import re
 import time
 from collections.abc import Awaitable, Callable, Mapping
+from urllib.parse import quote
 from dataclasses import dataclass
 
 import httpx
@@ -16,6 +17,17 @@ log = logging.getLogger(__name__)
 
 YAHOO_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
 MAX_SYMBOLS = 3
+MAX_CACHED = 256  # symbols kept; the oldest go first
+TICKER = re.compile(r"^\^?[A-Z0-9][A-Z0-9.\-]{0,11}(=[A-Z])?$")  # NVDA, ^GSPC, VWCE.DE, BRK-B, EURUSD=X
+
+
+def is_ticker(symbol: str) -> bool:
+    return TICKER.fullmatch(symbol) is not None
+
+
+def chart_url(symbol: str) -> str:
+    """Yahoo's chart URL for one symbol, escaped: nothing in it can change the path or the query."""
+    return YAHOO_URL.format(symbol=quote(symbol, safe=""))
 
 # Lowercase, diacritic-free stems. Stems of 4+ chars match word prefixes (nvidijos -> nvidi),
 # shorter ones only whole words (eth does not match ethernet).
@@ -76,7 +88,7 @@ def detect_symbols(text: str, aliases: Mapping[str, str], limit: int = MAX_SYMBO
 
 async def yahoo_fetch(symbol: str) -> dict | None:
     async with httpx.AsyncClient(timeout=5, headers={"User-Agent": "Mozilla/5.0"}) as client:
-        r = await client.get(YAHOO_URL.format(symbol=symbol), params={"range": "1d", "interval": "1d"})
+        r = await client.get(chart_url(symbol), params={"range": "1d", "interval": "1d"})
         return r.json() if r.status_code == 200 else None
 
 
@@ -98,7 +110,10 @@ class PriceClient:
         except Exception as e:  # network, timeout, bad JSON
             log.warning("price fetch failed for %s: %s", symbol, e)
             q = None
-        self._cache[symbol] = (now, q)
+        self._cache.pop(symbol, None)
+        self._cache[symbol] = (now, q)  # newest last
+        while len(self._cache) > MAX_CACHED:
+            del self._cache[next(iter(self._cache))]
         return q
 
     async def quotes(self, symbols: list[str]) -> list[Quote]:

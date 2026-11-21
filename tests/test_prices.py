@@ -102,3 +102,35 @@ async def test_kaina_command_no_llm(app):
     assert "nerandu" in out.sent[-1][1]
     await bot.on_message(inc("/kaina", msg_id=3))
     assert "/kaina <" in out.sent[-1][1]
+
+
+async def test_kaina_never_sends_text_that_is_not_a_ticker(app):
+    bot, store, llm, out = await app()
+    seen = []
+
+    async def fetch(symbol):
+        seen.append(symbol)
+        return None
+    bot.prices = PriceClient(fetch, clock=lambda: 1.0)
+    for i, text in enumerate(["../../v7/finance/quote?symbols=AAPL&x=", "a/b", "zz; drop", "x" * 40,
+                              "BRK-B", "eurusd=x", "nvda; drop"]):
+        await bot.on_message(inc(f"/kaina {text}", msg_id=10 + i, user=500 + i))  # one each: under the rate limit
+    assert seen == ["BRK-B", "EURUSD=X", "NVDA"]  # a known name in the text still works
+    assert "nerandu" in out.sent[0][1]
+
+
+def test_the_ticker_is_escaped_in_the_url():
+    from botucha.prices import chart_url
+    assert chart_url("^GSPC") == "https://query1.finance.yahoo.com/v8/finance/chart/%5EGSPC"
+    assert chart_url("EURUSD=X").endswith("/chart/EURUSD%3DX")
+
+
+async def test_the_price_cache_has_a_size_limit():
+    from botucha.prices import MAX_CACHED
+
+    async def fetch(symbol):
+        return None
+    pc = PriceClient(fetch, clock=lambda: 1.0)
+    for i in range(MAX_CACHED + 50):
+        await pc.quote(f"S{i}")
+    assert len(pc._cache) == MAX_CACHED and "S0" not in pc._cache and f"S{MAX_CACHED + 49}" in pc._cache

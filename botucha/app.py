@@ -27,7 +27,7 @@ from .config import Config
 from .export_import import import_export, parse_export
 from .feedback import score_for_reactions
 from .proofread import known_words, spelling_notes
-from .prices import DEFAULT_ALIASES, PriceClient, detect_symbols, format_quote
+from .prices import DEFAULT_ALIASES, PriceClient, detect_symbols, format_quote, is_ticker
 from .learn import LEARN_MAX_CALLS, clean_profile, learn_once, profiles_due, refresh_profiles, should_learn, unlearned
 from .llm import LLM
 from .memory import EMBED_BATCH, Memory
@@ -312,8 +312,9 @@ class Botucha:
         elif self.prices is None:
             reply = "kainos išjungtos"
         else:
-            symbols = detect_symbols(args, self.aliases) or [args.split()[0].lstrip("$").upper()]
-            quotes = await self.prices.quotes(symbols)
+            guess = args.split()[0].lstrip("$").upper()
+            symbols = detect_symbols(args, self.aliases) or ([guess] if is_ticker(guess) else [])
+            quotes = await self.prices.quotes(symbols) if symbols else []
             reply = "\n".join(format_quote(q) for q in quotes) if quotes else f"nerandu tokio tickerio: {args}"
         await self.outbox.send(m.chat_id, [reply], m.msg_id)
 
