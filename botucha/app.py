@@ -49,6 +49,7 @@ BOT_NAME = "Botucha"
 COMMAND_FAILED = "nepavyko, pabandyk veliau"
 TG_LIMIT = 4000
 FEEDBACK_ALIASES = {"geras": "gerai", "blogas": "blogai"}
+ANONYMOUS_ADMIN_ID = 1087968824  # Telegram's GroupAnonymousBot: a group admin posting as the group, a person
 RECOVER_S = 600  # a direct call cut off by a restart is answered afterwards if it is at most this old
 
 
@@ -214,10 +215,12 @@ class Botucha:
         if m.edited:
             self.store.update_message_text(m.chat_id, m.msg_id, m.text)
             return
+        if m.is_bot and m.user_id == ANONYMOUS_ADMIN_ID:
+            m.is_bot = False  # a person behind the group's name: may call him, and is not another bot
         own = m.is_bot or m.user_id == self.bot_user_id
         self.store.add_message(StoredMessage(m.chat_id, m.msg_id, m.user_id, m.name, m.ts, m.text,
                                              m.reply_to, own, m.image_file_id))
-        if not own:
+        if not own and m.user_id != ANONYMOUS_ADMIN_ID:  # one shared account for every anonymous admin: no profile
             self.store.upsert_member(m.user_id, m.name, m.username)
             self.memory.ensure_member_person(m.user_id, m.name, m.username)
         self.worker.activity()

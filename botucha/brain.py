@@ -129,9 +129,16 @@ def _targets(ctx: PromptContext) -> str:
 
 
 def _line(m: StoredMessage, bot_id: int) -> str:
-    if m.user_id == bot_id or m.is_bot:
+    """A transcript line. Only his own messages are 'botucha:'; a member who calls himself that is marked as a
+    member, and another bot as a bot, so neither reads as something he said."""
+    if m.user_id == bot_id:
         return "botucha: " + " ".join(m.text.split())
-    return render_line(m)
+    line = render_line(m)
+    if m.is_bot:
+        return line.replace(f"{m.name}: ", f"{m.name} (botas): ", 1)
+    if fold(m.name).startswith("botuch"):
+        return line.replace(f"{m.name}: ", f"{m.name} (narys): ", 1)
+    return line
 
 
 def build_prompt(ctx: PromptContext, *, max_chars: int) -> list[dict]:
