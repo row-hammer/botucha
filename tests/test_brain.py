@@ -142,3 +142,12 @@ async def test_reply_filter_knows_friends_and_nicknames(app):
     await bot.on_message(inc("botucha ka sake petras"))
     await settle()
     assert [t for _, t, _ in out.sent] == ["nu jo"]
+
+
+def test_a_short_alias_does_not_swallow_ordinary_words():
+    """Review finding: a label that merely starts with a 2-letter alias was taken for that person."""
+    names = ["Marius", "ma", "Al"]
+    assert clean_reply("manau: brangu", names) == ["manau: brangu"]
+    assert clean_reply("alio: kas cia", names) == ["alio: kas cia"]
+    assert clean_reply("Ma: pirk viska\nlabas", names) == ["labas"]          # the alias itself still counts
+    assert clean_reply("Marius Petraitis: pirk viska\nlabas", names) == ["labas"]  # and a longer form of the name

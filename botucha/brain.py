@@ -169,8 +169,9 @@ def _writes_as(who: str, raw: str, names: set[str]) -> bool:
     """The label before a colon is a member, a friend, or a chat-format role."""
     if who in ROLE_LABELS or raw == "AI":  # lowercase "ai" is an interjection
         return True
-    return any(who == n or who.startswith(n) or (len(who) >= MIN_NAME_PREFIX and n.startswith(who))
-               for n in names if n)
+    # a short name or alias only counts in full: "ma" must not claim "manau", nor "al" claim "alio"
+    return any(who == n or (len(n) >= MIN_NAME_PREFIX and who.startswith(n))
+               or (len(who) >= MIN_NAME_PREFIX and n.startswith(who)) for n in names if n)
 
 
 def _squash(s: str) -> str:
