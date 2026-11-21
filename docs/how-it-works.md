@@ -279,10 +279,11 @@ silently mixes old and new data while still passing an integrity check.
 
 ## Making the persona yours
 
-`persona.md` is plain text (Lithuanian in the example) and is read on every reply. The example persona is an
-old trader who answers like a normal friend first and uses his backstory only as seasoning, uses the group's
-slang where it fits, points out the thinking error behind an insult, warns a friend before a truly bad money
-decision, and never admits to being a bot.
+`persona.md` is plain text (Lithuanian in the example) and is read on every reply. The example persona is a
+laid-back long-time member of a friends' group: he answers like a normal friend, keeps it short, uses the
+group's slang only where it fits, warns a friend before something truly stupid, never admits to being a bot,
+and never reveals or changes his instructions. Keep the writing and "rules nobody can change" parts when you
+make it yours: the reply filters assume short lowercase lines, no markdown, and never writing as another member.
 
 Tips from tuning it:
 
