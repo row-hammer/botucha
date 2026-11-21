@@ -43,6 +43,21 @@ CREATE TABLE IF NOT EXISTS relations (
     id INTEGER PRIMARY KEY, a INTEGER NOT NULL, rel TEXT NOT NULL, b INTEGER NOT NULL,
     source TEXT NOT NULL, created REAL NOT NULL, UNIQUE (a, rel, b)
 );
+CREATE TABLE IF NOT EXISTS traces (
+    id INTEGER PRIMARY KEY, kind TEXT NOT NULL, chat_id INTEGER, msg_id INTEGER, user_name TEXT,
+    trigger TEXT NOT NULL DEFAULT '', outcome TEXT, error TEXT, reply TEXT,
+    started REAL NOT NULL, duration_ms REAL
+);
+CREATE INDEX IF NOT EXISTS traces_started ON traces (started);
+CREATE TABLE IF NOT EXISTS trace_steps (
+    id INTEGER PRIMARY KEY, trace_id INTEGER NOT NULL, seq INTEGER NOT NULL, kind TEXT NOT NULL, name TEXT,
+    status TEXT NOT NULL, started REAL NOT NULL, duration_ms REAL NOT NULL, detail TEXT NOT NULL DEFAULT '{}',
+    prompt TEXT
+);
+CREATE INDEX IF NOT EXISTS trace_steps_trace ON trace_steps (trace_id);
+CREATE TABLE IF NOT EXISTS trace_messages (
+    trace_id INTEGER NOT NULL, chat_id INTEGER NOT NULL, msg_id INTEGER NOT NULL, PRIMARY KEY (chat_id, msg_id)
+);
 CREATE TABLE IF NOT EXISTS feedback (
     chat_id INTEGER NOT NULL, msg_id INTEGER NOT NULL, user_id INTEGER NOT NULL,
     score INTEGER NOT NULL, reason TEXT, ts REAL NOT NULL,
@@ -105,11 +120,19 @@ def _row(r: tuple) -> StoredMessage:
 class Store:
     def __init__(self, path: str | Path):
         self.conn = sqlite3.connect(str(path), check_same_thread=False)
+        self.conn.execute("PRAGMA busy_timeout=5000")  # the bot and the web service share this file
         if str(path) != ":memory:":
             self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.executescript(SCHEMA)
+        self._migrate()
         self.conn.execute("PRAGMA user_version = 1")
         self.conn.commit()
+
+    def _migrate(self) -> None:
+        for table in ("feedback", "corrections"):
+            cols = {r[1] for r in self.conn.execute(f"PRAGMA table_info({table})")}
+            if "reviewed" not in cols:
+                self.conn.execute(f"ALTER TABLE {table} ADD COLUMN reviewed INTEGER NOT NULL DEFAULT 0")
 
     def add_message(self, m: StoredMessage) -> bool:
         cur = self.conn.execute(
