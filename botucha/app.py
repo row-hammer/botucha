@@ -411,11 +411,15 @@ class Botucha:
         return ids | {p.id for p in self.memory.people() if p.user_id in authors}
 
     def _member_names(self) -> list[str]:
+        """Every name a reply line must not be written as: members, their usernames, and every person and
+        word form he knows (friends outside the group included)."""
         names = []
         for mem in self.store.members().values():
             names.append(mem.name)
             if mem.username:
                 names.append(mem.username)
+        for p in self.memory.people():
+            names += [p.name, *p.aliases]
         return names
 
     # ---- surviving restarts and crashes ---------------------------------

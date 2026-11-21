@@ -144,7 +144,16 @@ def build_prompt(ctx: PromptContext, *, max_chars: int) -> list[dict]:
 
 
 _MD = re.compile(r"[*_`]")
-ROLE_LABELS = {"assistant", "bot", "user", "system", "ai", "eval"}
+ROLE_LABELS = {"assistant", "bot", "user", "system", "eval"}
+MIN_NAME_PREFIX = 4  # "Jona:" is Jonas mangled; "jo:" is just "yes"
+
+
+def _writes_as(who: str, raw: str, names: set[str]) -> bool:
+    """The label before a colon is a member, a friend, or a chat-format role."""
+    if who in ROLE_LABELS or raw == "AI":  # lowercase "ai" is an interjection
+        return True
+    return any(who == n or who.startswith(n) or (len(who) >= MIN_NAME_PREFIX and n.startswith(who))
+               for n in names if n)
 
 
 def _squash(s: str) -> str:
@@ -160,7 +169,7 @@ def clean_reply(raw: str, member_names: list[str], max_lines: int = MAX_LINES) -
         m = re.match(r"^([^:]{1,32}?):\s*(.*)$", line)
         if m:
             who = _squash(m.group(1))
-            if who in ROLE_LABELS or any(who and n.startswith(who) for n in names):
+            if who and _writes_as(who, m.group(1).strip(), names):
                 continue  # model wrote as a real member or leaked a chat-format label
             if who.startswith("botuch"):
                 line = m.group(2)

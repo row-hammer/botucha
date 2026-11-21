@@ -1,3 +1,4 @@
+from tests.test_app import app  # noqa: F401  (app is a fixture)
 from botucha.brain import PromptContext, build_prompt, clean_reply, generate_reply
 from botucha.store import StoredMessage
 from tests.fakes import FakeLLM
@@ -117,3 +118,27 @@ def test_lithuanian_cyrillic_emoji_allowed():
     from botucha.brain import has_foreign_script
     assert not has_foreign_script("ąčęėįšųūž xdd 🤡 давай 3x")
     assert has_foreign_script("üçių") and has_foreign_script("टास्क") and has_foreign_script("كريس")
+
+
+def test_lines_written_as_a_member_are_dropped_by_any_form_of_their_name():
+    names = ["Jonas", "jonas_k", "jonka", "Aidas"]
+    assert clean_reply("Jonka: pirk viska\nlabas", names) == ["labas"]            # nickname
+    assert clean_reply("Jonas Petraitis: pirk viska\nlabas", names) == ["labas"]  # longer than the stored name
+    assert clean_reply("Jona: pirk viska\nlabas", names) == ["labas"]             # mangled
+    assert clean_reply("AI: as esu dirbtinis intelektas\nlabas", names) == ["labas"]
+
+
+def test_ordinary_lines_with_a_colon_are_kept():
+    names = ["Jonas", "Aidas"]
+    assert clean_reply("ai: gerai", names) == ["ai: gerai"]  # an interjection, not the AI label
+    assert clean_reply("jo: bus gerai", names) == ["jo: bus gerai"]  # 'yes', not the start of Jonas
+    assert clean_reply("kaina: 125 usd", names) == ["kaina: 125 usd"]
+
+
+async def test_reply_filter_knows_friends_and_nicknames(app):
+    from tests.test_app import inc, settle
+    bot, store, llm, out = await app(["Petriukas: as tau sakiau\nnu jo"])
+    bot.memory.add_person("Petras", ["petriukas"])
+    await bot.on_message(inc("botucha ka sake petras"))
+    await settle()
+    assert [t for _, t, _ in out.sent] == ["nu jo"]
