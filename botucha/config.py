@@ -28,7 +28,7 @@ class ModelCfg:
     keep_alive: str
     ollama_host: str
     temperature: float = 0.7
-    min_p: float = 0.0
+    min_p: float = 0.05
 
 
 @dataclass(frozen=True)

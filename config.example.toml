@@ -19,7 +19,7 @@ ollama_host = "http://localhost:11434"
 # Lower = fewer invented words and grammar slips, higher = more random humor.
 temperature = 0.7
 # Drop tokens less likely than min_p x the top token's chance; cuts invented words. 0 = off.
-min_p = 0.0
+min_p = 0.05
 
 [trigger]
 # Word prefixes, case-insensitive, diacritics ignored.
