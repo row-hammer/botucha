@@ -98,3 +98,36 @@ async def test_rimtai_question_stays_in_history(app):
     await settle()
     user = llm.calls[0]["messages"][1]["content"]
     assert "kaip veikia etf" in user
+
+
+def test_speller_skips_names_inside_a_sentence():
+    sp = Speller(DICT, vocab=set)
+    assert sp.unknown(["pirkau Vanguard fondą, Bonnie Blue irgi"]) == []
+
+
+def test_speller_still_checks_the_first_word_of_a_sentence():
+    sp = Speller(DICT, vocab=set)
+    assert sp.unknown(["Varkotės čia. Nuosekusi varna! Skrietėti?"]) == ["Varkotės", "Nuosekusi", "Skrietėti"]
+
+
+async def test_min_p_from_config_is_sent():
+    from botucha.config import ModelCfg
+    from botucha.llm import OllamaLLM
+    llm = OllamaLLM(ModelCfg("m", "e", 1024, 10, "1m", "http://localhost:11434", temperature=0.6, min_p=0.05))
+    seen = {}
+
+    async def fake_chat(**kw):
+        seen.update(kw)
+        return {"message": {"content": "ok"}}
+
+    llm.client.chat = fake_chat
+    await llm.chat([{"role": "user", "content": "x"}], num_predict=5)
+    assert seen["options"]["min_p"] == 0.05 and seen["options"]["temperature"] == 0.6
+
+
+def test_min_p_missing_from_old_config_uses_default(tmp_path):
+    from botucha.config import ModelCfg, load_config
+    src = (Path(__file__).parent.parent / "config.example.toml").read_text()
+    p = tmp_path / "config.toml"
+    p.write_text("\n".join(l for l in src.splitlines() if not l.startswith("min_p")))
+    assert load_config(p, {"BOTUCHA_TOKEN": "t"}).model.min_p == ModelCfg.min_p

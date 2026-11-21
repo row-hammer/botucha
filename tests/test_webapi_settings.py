@@ -131,3 +131,11 @@ async def test_config_get_fills_keys_missing_from_old_files(web):
     values = (await client.get("/api/config")).json()["values"]
     assert values["model.temperature"] == deps.cfg.model.temperature
     assert values["trigger.user_calls_per_min"] == deps.cfg.trigger.user_calls_per_min
+
+
+async def test_config_min_p_editable_within_range(web):
+    client, deps, _ = await web()
+    assert (await client.put("/api/config", json={"values": {"model.min_p": 1.5}})).status_code == 422
+    assert (await client.put("/api/config", json={"values": {"model.min_p": 0.1}})).status_code == 200
+    assert load_config(deps.config_path, {"BOTUCHA_TOKEN": "x"}).model.min_p == 0.1
+    assert (await client.get("/api/config")).json()["values"]["model.min_p"] == 0.1

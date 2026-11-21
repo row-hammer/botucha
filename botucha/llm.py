@@ -66,6 +66,6 @@ class OllamaLLM:
             model=self.cfg.chat_model, messages=messages, think=False, keep_alive=self.cfg.keep_alive,
             format="json" if fmt_json else None,
             options={"num_ctx": self.cfg.num_ctx, "num_predict": num_predict,
-                     "temperature": self.cfg.temperature})
+                     "temperature": self.cfg.temperature, "min_p": self.cfg.min_p})
         raw = r.model_dump() if hasattr(r, "model_dump") else dict(r)  # dict in tests
         return ChatResult(r["message"]["content"] or "", self._stats(raw))

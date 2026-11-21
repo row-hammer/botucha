@@ -316,6 +316,7 @@
     "restartNow": "Restart now",
     "fields": {
       "model_temperature": "Temperature",
+      "model_min_p": "Min-p",
       "model_num_predict": "Max reply tokens",
       "trigger_keywords": "Keywords",
       "trigger_keyword_prob": "Keyword reply chance",
@@ -329,6 +330,7 @@
     },
     "hints": {
       "model_temperature": "Lower = fewer invented words, higher = wilder humor (0–2).",
+      "model_min_p": "Cuts unlikely tokens, so fewer invented words (0 = off, 0.05–0.1 typical).",
       "trigger_keywords": "Comma separated word beginnings, e.g. spx, btc, akcij"
     }
   }

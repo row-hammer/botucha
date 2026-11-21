@@ -14,6 +14,7 @@ from .trigger import fold
 log = logging.getLogger(__name__)
 
 _WORD = re.compile(r"[^\W\d_]+")  # letters only: vram'ą -> vram, ą; numbers and tickers' digits drop out
+_SENTENCE = re.compile(r"(?<=[.!?…])\s+|\n")
 
 
 class Speller:
@@ -42,10 +43,12 @@ class Speller:
         known = self._known()
         cand: list[str] = []
         for t in texts:
-            for w in _WORD.findall(t):
-                if len(w) <= 2 or w.isupper() or fold(w) in known or w in cand:
-                    continue
-                cand.append(w)
+            for sentence in _SENTENCE.split(t):
+                for i, w in enumerate(_WORD.findall(sentence)):
+                    name = i > 0 and w[0].isupper()  # Vanguard, Bonnie Blue: names the dictionary cannot know
+                    if len(w) <= 2 or w.isupper() or name or fold(w) in known or w in cand:
+                        continue
+                    cand.append(w)
         if not cand:
             return []
         try:

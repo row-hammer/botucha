@@ -316,6 +316,7 @@
     "restartNow": "Perkrauti dabar",
     "fields": {
       "model_temperature": "Temperatūra",
+      "model_min_p": "Min-p",
       "model_num_predict": "Daugiausiai atsakymo tokenų",
       "trigger_keywords": "Raktažodžiai",
       "trigger_keyword_prob": "Tikimybė atsakyti į raktažodį",
@@ -329,6 +330,7 @@
     },
     "hints": {
       "model_temperature": "Mažiau = mažiau išgalvotų žodžių, daugiau = laukinesnis humoras (0–2).",
+      "model_min_p": "Atmeta mažai tikėtinus žodžių gabalus: mažiau išgalvotų žodžių (0 = išjungta, įprastai 0.05–0.1).",
       "trigger_keywords": "Žodžių pradžios, atskirtos kableliais, pvz. spx, btc, akcij"
     }
   }

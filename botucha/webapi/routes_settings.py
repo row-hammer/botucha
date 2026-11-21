@@ -15,6 +15,7 @@ router = APIRouter()
 # key -> (type, min, max); lists are lists of strings
 EDITABLE: dict[str, tuple[type, float | None, float | None]] = {
     "model.temperature": (float, 0.0, 2.0),
+    "model.min_p": (float, 0.0, 1.0),
     "model.num_predict": (int, 16, 2048),
     "trigger.keywords": (list, None, None),
     "trigger.keyword_prob": (float, 0.0, 1.0),

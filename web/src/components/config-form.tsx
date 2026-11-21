@@ -15,6 +15,7 @@ import { useT } from "@/lib/i18n";
 // same ranges as the API (botucha/webapi/routes_settings.py)
 const NUMBERS: [string, number, number, boolean][] = [
   ["model.temperature", 0, 2, false],
+  ["model.min_p", 0, 1, false],
   ["model.num_predict", 16, 2048, true],
   ["trigger.keyword_prob", 0, 1, false],
   ["trigger.random_n", 2, 10_000, true],
@@ -107,8 +108,8 @@ export function ConfigForm() {
                   <p className="text-bad text-xs">
                     {lo} – {hi}
                   </p>
-                ) : k === "model.temperature" ? (
-                  <p className="text-muted-foreground text-xs">{t("settings.hints.model_temperature")}</p>
+                ) : k === "model.temperature" || k === "model.min_p" ? (
+                  <p className="text-muted-foreground text-xs">{t(`settings.hints.${field(k)}`)}</p>
                 ) : null}
               </div>
             ))}
