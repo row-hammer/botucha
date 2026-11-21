@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 from dataclasses import dataclass, field
 
 from .chunking import render_line
@@ -204,6 +205,7 @@ async def generate_reply_ex(llm: LLM, ctx: PromptContext, *, num_predict: int, m
         except Exception as e:  # model down, timeout, bad response
             log.warning("generation failed (attempt %d): %s", attempt + 1, e)
             continue
+        t_filter = time.perf_counter()
         texts = clean_reply(res.text, member_names, max_lines)
         checks = [_check("empty", bool(texts), "" if texts else "nothing left after cleanup")]
         verdict = None
@@ -232,7 +234,8 @@ async def generate_reply_ex(llm: LLM, ctx: PromptContext, *, num_predict: int, m
                     verdict = "rejected"
         else:
             verdict = "rejected"
-        run.add_step("filter", name=label, status=verdict or "ok", detail={"checks": checks})
+        run.add_step("filter", name=label, status=verdict or "ok", detail={"checks": checks},
+                     duration_ms=(time.perf_counter() - t_filter) * 1000)
         if verdict is None:
             return ReplyResult(texts)
     if misspelled:  # both attempts had odd words: send the cleaner one rather than nothing

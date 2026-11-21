@@ -90,5 +90,113 @@
     "repeat": "repeat",
     "foreign": "foreign script",
     "spelling": "spelling"
+  },
+  "thinking": {
+    "cols": {
+      "time": "Time",
+      "who": "Who",
+      "trigger": "Trigger",
+      "duration": "Duration",
+      "attempts": "Attempts",
+      "outcome": "Outcome",
+      "reply": "Reply"
+    },
+    "kind": {
+      "all": "All runs",
+      "reply": "Replies",
+      "learn": "Learning"
+    },
+    "outcome": {
+      "all": "All outcomes",
+      "sent": "Sent",
+      "fallback": "Fallback",
+      "canned": "Canned reply",
+      "error": "Error",
+      "skipped": "Silent",
+      "running": "Running"
+    },
+    "empty": "No traces yet. They appear here as soon as Botucha replies or learns.",
+    "back": "All traces",
+    "notFound": "This trace no longer exists (traces are kept for 30 days).",
+    "timeline": "Timeline",
+    "graph": "Steps",
+    "total": "Total {t}",
+    "trigger": {
+      "direct": "addressed to him",
+      "serious": "/rimtai",
+      "recall": "/atsimeni",
+      "reaction": "reaction",
+      "idle": "idle learning",
+      "keyword": "keyword “{k}”",
+      "random": "random 1/{n}"
+    },
+    "panel": {
+      "status": "Status",
+      "duration": "Duration",
+      "noDetail": "No details for this step.",
+      "facts": "Facts used",
+      "chunks": "Old conversations used",
+      "prices": "Prices",
+      "score": "Score",
+      "fts": "word match",
+      "query": "Search text",
+      "sections": "Prompt size by section",
+      "tokens": "≈ {n} tokens",
+      "showPrompt": "Show full prompt",
+      "hidePrompt": "Hide prompt",
+      "promptGone": "Full prompts are kept for 7 days.",
+      "raw": "Raw model text",
+      "stats": "Model stats",
+      "checks": "Checks",
+      "passed": "passed",
+      "msgIds": "Telegram messages",
+      "added": "Added",
+      "rejected": "Rejected",
+      "error": "Error",
+      "history": "Messages in context",
+      "ownDropped": "Own lines dropped",
+      "chars": "{n} chars"
+    },
+    "stats": {
+      "model": "model",
+      "prompt_eval_count": "prompt tokens",
+      "eval_count": "generated tokens",
+      "tok_s": "tok/s",
+      "eval_ms": "generation",
+      "prompt_eval_ms": "prompt reading",
+      "load_ms": "model load",
+      "total_ms": "total"
+    }
+  },
+  "step": {
+    "context": "Context",
+    "retrieval": "Memory search",
+    "prompt": "Prompt",
+    "generation": "Generation",
+    "filter": "Filters",
+    "send": "Send",
+    "extract": "Extract",
+    "facts": "Facts",
+    "slang": "Slang"
+  },
+  "stepStatus": {
+    "ok": "ok",
+    "rejected": "rejected",
+    "skipped": "skipped",
+    "error": "error"
+  },
+  "sections": {
+    "persona": "persona",
+    "guard": "guard",
+    "price_rule": "price rule",
+    "serious": "serious mode",
+    "style": "style examples",
+    "profiles": "profiles",
+    "people": "people",
+    "slang": "slang",
+    "chunks": "old chats",
+    "facts": "facts",
+    "prices": "prices",
+    "history": "conversation"
   }
 }

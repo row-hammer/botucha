@@ -90,5 +90,113 @@
     "repeat": "kartojimas",
     "foreign": "svetimi rašmenys",
     "spelling": "rašyba"
+  },
+  "thinking": {
+    "cols": {
+      "time": "Laikas",
+      "who": "Kas",
+      "trigger": "Priežastis",
+      "duration": "Trukmė",
+      "attempts": "Bandymai",
+      "outcome": "Rezultatas",
+      "reply": "Atsakymas"
+    },
+    "kind": {
+      "all": "Visi",
+      "reply": "Atsakymai",
+      "learn": "Mokymasis"
+    },
+    "outcome": {
+      "all": "Visi rezultatai",
+      "sent": "Išsiųsta",
+      "fallback": "Atsarginis",
+      "canned": "Šabloninis atsakymas",
+      "error": "Klaida",
+      "skipped": "Patylėjo",
+      "running": "Vyksta"
+    },
+    "empty": "Pėdsakų dar nėra. Jie atsiras, kai tik Botucha atsakys ar pasimokys.",
+    "back": "Visi pėdsakai",
+    "notFound": "Šio pėdsako nebėra (pėdsakai saugomi 30 dienų).",
+    "timeline": "Laiko juosta",
+    "graph": "Žingsniai",
+    "total": "Iš viso {t}",
+    "trigger": {
+      "direct": "kreipėsi į jį",
+      "serious": "/rimtai",
+      "recall": "/atsimeni",
+      "reaction": "reakcija",
+      "idle": "mokymasis ramiu metu",
+      "keyword": "raktažodis „{k}“",
+      "random": "atsitiktinai 1/{n}"
+    },
+    "panel": {
+      "status": "Būsena",
+      "duration": "Trukmė",
+      "noDetail": "Šis žingsnis neturi detalių.",
+      "facts": "Panaudoti faktai",
+      "chunks": "Panaudoti seni pokalbiai",
+      "prices": "Kainos",
+      "score": "Balas",
+      "fts": "žodžio atitikmuo",
+      "query": "Paieškos tekstas",
+      "sections": "Prompto dydis pagal dalis",
+      "tokens": "≈ {n} tokenų",
+      "showPrompt": "Rodyti visą promptą",
+      "hidePrompt": "Slėpti promptą",
+      "promptGone": "Pilni promptai saugomi 7 dienas.",
+      "raw": "Neapdorotas modelio tekstas",
+      "stats": "Modelio statistika",
+      "checks": "Patikros",
+      "passed": "praėjo",
+      "msgIds": "Telegram žinutės",
+      "added": "Pridėta",
+      "rejected": "Atmesta",
+      "error": "Klaida",
+      "history": "Žinučių kontekste",
+      "ownDropped": "Išmesta savų eilučių",
+      "chars": "{n} simb."
+    },
+    "stats": {
+      "model": "modelis",
+      "prompt_eval_count": "prompto tokenai",
+      "eval_count": "sugeneruoti tokenai",
+      "tok_s": "tok/s",
+      "eval_ms": "generavimas",
+      "prompt_eval_ms": "prompto skaitymas",
+      "load_ms": "modelio įkėlimas",
+      "total_ms": "iš viso"
+    }
+  },
+  "step": {
+    "context": "Kontekstas",
+    "retrieval": "Atminties paieška",
+    "prompt": "Promptas",
+    "generation": "Generavimas",
+    "filter": "Filtrai",
+    "send": "Siuntimas",
+    "extract": "Ištraukimas",
+    "facts": "Faktai",
+    "slang": "Slengas"
+  },
+  "stepStatus": {
+    "ok": "gerai",
+    "rejected": "atmesta",
+    "skipped": "praleista",
+    "error": "klaida"
+  },
+  "sections": {
+    "persona": "persona",
+    "guard": "apsauga",
+    "price_rule": "kainų taisyklė",
+    "serious": "rimtas režimas",
+    "style": "stiliaus pavyzdžiai",
+    "profiles": "profiliai",
+    "people": "žmonės",
+    "slang": "slengas",
+    "chunks": "seni pokalbiai",
+    "facts": "faktai",
+    "prices": "kainos",
+    "history": "pokalbis"
   }
 }

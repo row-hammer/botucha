@@ -151,3 +151,19 @@ async def test_learn_trace_records_rejections():
     assert st["facts"]["added"] == ["Jonas mėgsta kukulius."]
     assert st["facts"]["rejected"][0]["reason"] == "instruction"
     assert st["slang"]["added"] == ["xymkė = chemija"]
+
+
+async def test_filter_step_is_timed(tbot):
+    bot, store, out = await tbot(["labas tau"])
+
+    class SlowSpeller:
+        def unknown(self, texts):
+            import time
+            time.sleep(0.02)
+            return []
+    bot.speller = SlowSpeller()
+    await bot.on_message(inc("botucha?"))
+    await settle()
+    [(tid, *_)] = traces(store)
+    ms = store.conn.execute("SELECT duration_ms FROM trace_steps WHERE trace_id=? AND kind='filter'", (tid,)).fetchone()[0]
+    assert ms >= 15
