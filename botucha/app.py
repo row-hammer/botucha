@@ -113,6 +113,7 @@ class Botucha:
         self._vision_checked_at = -1e18
         self._last_error: str | None = None
         store.set_state("bot_started_at", str(self.started_at))
+        self.last_error = None  # a new run: the dashboard shows what goes wrong from here on
         self._ignored_chats: set[int] = set()
         self._locked = frozenset(cfg.memory.locked_members)
         self._bot_re = cfg.telegram.bot_name_regex
@@ -135,10 +136,24 @@ class Botucha:
     @last_error.setter
     def last_error(self, value: str | None) -> None:
         self._last_error = value
+        self._error_seq = getattr(self, "_error_seq", 0) + 1
         try:
             self.store.set_state("last_error", value or "")
         except Exception as e:
             log.warning("cannot store last error: %s", e)
+
+    def _clear_error(self, kind: str, since: int | None = None) -> None:
+        """kind's work just succeeded: forget an error of that kind. 'reply' covers everything a reply does
+        (model, send, store); backups and learning only clear themselves, so a good reply cannot hide them.
+        since: an error set after this point is newer than the success and stays."""
+        err = self.last_error
+        if not err or (since is not None and self._error_seq > since):
+            return
+        if kind == "reply":
+            if not err.startswith(("backup:", "learn:")):
+                self.last_error = None
+        elif err.startswith(f"{kind}:"):
+            self.last_error = None
 
     def sync_state(self) -> None:
         """Pick up on/off, frequency and quiet time written by the web dashboard."""
@@ -166,6 +181,7 @@ class Botucha:
             made = daily_backup(self.store.conn, folder, dt.date.fromtimestamp(self.clock()))
             if made:
                 log.info("database backup written: %s", made.name)
+            self._clear_error("backup")
         except Exception as e:
             log.warning("database backup failed: %s", e)
             self.last_error = f"backup: {type(e).__name__}: {e}"
@@ -447,6 +463,7 @@ class Botucha:
         for j in jobs:
             by_chat.setdefault(j.chat_id, []).append(j)
         self.save_pending(jobs)  # until answered: a crash from here on loses nothing
+        self._batch_seq = self._error_seq  # errors from here on belong to this batch
         for chat_id, chat_jobs in list(by_chat.items()):
             try:
                 await self._reply(chat_id, chat_jobs)
@@ -562,6 +579,8 @@ class Botucha:
             return
         run.finish("fallback" if result.fallback else "sent", reply="\n".join(texts),
                    sent=[(chat_id, mid) for mid in sent])
+        if len(sent) == len(texts):
+            self._clear_error("reply", since=getattr(self, "_batch_seq", None))
         if self.warm_prompt_cache and not ctx.serious and image is None and result.prompt_ms_per_token \
                 and result.prompt_ms_per_token > CACHE_MISS_MS_PER_TOKEN:
             self._warmed = None  # read from scratch: something else took the cache (learning, a description)
@@ -676,6 +695,7 @@ class Botucha:
             self._used_model = False
             try:
                 await self._learn_tick()
+                self._clear_error("learn")
             except Exception as e:
                 log.exception("learning failed")
                 self.last_error = f"learn: {e}"
