@@ -1,0 +1,94 @@
+{
+  "app": {
+    "title": "Botucha",
+    "subtitle": "local dashboard"
+  },
+  "nav": {
+    "overview": "Overview",
+    "thinking": "Thinking",
+    "memory": "Memory",
+    "people": "People",
+    "ratings": "Ratings",
+    "controls": "Controls",
+    "settings": "Persona & Settings"
+  },
+  "common": {
+    "language": "Language",
+    "theme": "Theme",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System",
+    "loading": "Loading…",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "add": "Add",
+    "close": "Close",
+    "search": "Search",
+    "refresh": "Refresh",
+    "all": "All",
+    "none": "None",
+    "yes": "Yes",
+    "no": "No",
+    "confirm": "Are you sure?",
+    "saved": "Saved",
+    "deleted": "Deleted",
+    "loadOlder": "Load older"
+  },
+  "errors": {
+    "busy": "The database is busy, try again in a moment.",
+    "network": "Cannot reach the dashboard service.",
+    "generic": "Something went wrong: {msg}"
+  },
+  "status": {
+    "active": "Running",
+    "inactive": "Stopped",
+    "failed": "Crashed",
+    "activating": "Starting",
+    "deactivating": "Stopping",
+    "unknown": "Unknown",
+    "lastError": "Last error",
+    "model": "Model",
+    "uptime": "Up since",
+    "enabled": "Replying",
+    "disabled": "Off",
+    "quietUntil": "Quiet until {time}"
+  },
+  "overview": {
+    "range": {
+      "24h": "24 hours",
+      "7d": "7 days",
+      "30d": "30 days"
+    },
+    "cards": {
+      "replies": "Replies",
+      "median": "Median reply time",
+      "toks": "Generation speed",
+      "rejections": "Filter rejections",
+      "good": "Good ratings",
+      "bad": "Bad ratings"
+    },
+    "charts": {
+      "latency": "Reply time",
+      "replies": "Replies",
+      "rejections": "Rejections by filter",
+      "ratings": "Ratings",
+      "p50": "median",
+      "p95": "95th percentile"
+    },
+    "noData": "No data in this range yet."
+  },
+  "units": {
+    "ms": "{n} ms",
+    "s": "{n} s",
+    "toks": "{n} tok/s"
+  },
+  "checks": {
+    "empty": "empty",
+    "leak": "persona leak",
+    "repeat": "repeat",
+    "foreign": "foreign script",
+    "spelling": "spelling"
+  }
+}

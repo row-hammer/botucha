@@ -1,0 +1,94 @@
+{
+  "app": {
+    "title": "Botucha",
+    "subtitle": "vietinis valdymo skydelis"
+  },
+  "nav": {
+    "overview": "Apžvalga",
+    "thinking": "Mąstymas",
+    "memory": "Atmintis",
+    "people": "Žmonės",
+    "ratings": "Įvertinimai",
+    "controls": "Valdymas",
+    "settings": "Persona ir nustatymai"
+  },
+  "common": {
+    "language": "Kalba",
+    "theme": "Tema",
+    "light": "Šviesi",
+    "dark": "Tamsi",
+    "system": "Sistemos",
+    "loading": "Kraunama…",
+    "save": "Išsaugoti",
+    "cancel": "Atšaukti",
+    "delete": "Ištrinti",
+    "edit": "Redaguoti",
+    "add": "Pridėti",
+    "close": "Uždaryti",
+    "search": "Ieškoti",
+    "refresh": "Atnaujinti",
+    "all": "Visi",
+    "none": "Nėra",
+    "yes": "Taip",
+    "no": "Ne",
+    "confirm": "Ar tikrai?",
+    "saved": "Išsaugota",
+    "deleted": "Ištrinta",
+    "loadOlder": "Rodyti senesnius"
+  },
+  "errors": {
+    "busy": "Duomenų bazė užimta, pabandyk po akimirkos.",
+    "network": "Nepavyksta pasiekti skydelio serviso.",
+    "generic": "Kažkas nepavyko: {msg}"
+  },
+  "status": {
+    "active": "Veikia",
+    "inactive": "Sustabdytas",
+    "failed": "Nulūžęs",
+    "activating": "Paleidžiamas",
+    "deactivating": "Stabdomas",
+    "unknown": "Nežinoma",
+    "lastError": "Paskutinė klaida",
+    "model": "Modelis",
+    "uptime": "Veikia nuo",
+    "enabled": "Atsakinėja",
+    "disabled": "Išjungtas",
+    "quietUntil": "Tyli iki {time}"
+  },
+  "overview": {
+    "range": {
+      "24h": "24 valandos",
+      "7d": "7 dienos",
+      "30d": "30 dienų"
+    },
+    "cards": {
+      "replies": "Atsakymai",
+      "median": "Atsakymo laiko mediana",
+      "toks": "Generavimo greitis",
+      "rejections": "Filtrų atmetimai",
+      "good": "Geri įvertinimai",
+      "bad": "Blogi įvertinimai"
+    },
+    "charts": {
+      "latency": "Atsakymo laikas",
+      "replies": "Atsakymai",
+      "rejections": "Atmetimai pagal filtrą",
+      "ratings": "Įvertinimai",
+      "p50": "mediana",
+      "p95": "95-as procentilis"
+    },
+    "noData": "Šiame laikotarpyje dar nėra duomenų."
+  },
+  "units": {
+    "ms": "{n} ms",
+    "s": "{n} s",
+    "toks": "{n} tok/s"
+  },
+  "checks": {
+    "empty": "tuščias",
+    "leak": "personos nutekėjimas",
+    "repeat": "kartojimas",
+    "foreign": "svetimi rašmenys",
+    "spelling": "rašyba"
+  }
+}
