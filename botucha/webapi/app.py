@@ -78,6 +78,10 @@ def create_app(deps: Deps, *, token: str | None = None, dev: bool = False, port:
             continue
         app.include_router(module.router)
 
+    @app.api_route("/api/{rest:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"], include_in_schema=False)
+    async def unknown_api(rest: str):  # a typo in the UI must fail loudly, not get index.html back
+        return JSONResponse({"error": "no such API endpoint"}, status_code=404)
+
     if deps.static_dir and Path(deps.static_dir).is_dir():
         app.mount("/", StaticFiles(directory=deps.static_dir, html=True), name="ui")
     else:

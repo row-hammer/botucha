@@ -43,6 +43,7 @@ async def test_locked_db_returns_503(web):
     async def boom():
         raise sqlite3.OperationalError("database is locked")
     app.add_api_route("/api/test-locked", boom)
+    app.router.routes.insert(0, app.router.routes.pop())  # ahead of the /api catch-all 404
     r = await client.get("/api/test-locked")
     assert r.status_code == 503 and r.json() == {"error": "busy"}
 
@@ -68,3 +69,14 @@ async def test_hosts_follow_the_port(web):
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://127.0.0.1:9000") as c:
         assert (await c.get("/api/session")).status_code == 200
         assert (await c.get("/api/session", headers={"Host": "127.0.0.1:8765"})).status_code == 400
+
+
+async def test_unknown_api_path_is_a_json_404_not_the_ui(web, tmp_path):
+    static = tmp_path / "out"
+    static.mkdir()
+    (static / "index.html").write_text("<html>ui</html>")
+    client, _, _ = await web(static_dir=static)
+    for method in ("get", "post"):
+        r = await getattr(client, method)("/api/no-such-thing")
+        assert r.status_code == 404 and r.json() == {"error": "no such API endpoint"}
+    assert (await client.get("/")).text == "<html>ui</html>"
