@@ -85,9 +85,11 @@ def test_ollama_client_has_timeout():
 
 
 def test_example_config_has_no_private_values():
-    text = (FIX.parent.parent.parent / "config.example.toml").read_text()
-    for private in ("100000001", "1234567890", "/home/user"):
-        assert private not in text
+    from botucha.config import load_config
+    path = FIX.parent.parent.parent / "config.example.toml"
+    cfg = load_config(path, {"BOTUCHA_TOKEN": "t"})
+    assert cfg.telegram.admin_id == 123456789 and cfg.telegram.chat_ids == (-1001234567890,)
+    assert "/home/" not in path.read_text() and cfg.paths.export is None
 
 
 async def test_temperature_from_config_is_sent():

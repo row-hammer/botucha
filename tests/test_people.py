@@ -47,9 +47,9 @@ async def test_update_relinks_and_new_person_relinks_old_facts():
     fid = await m.add_fact("fact", "ugnius dirba su petras", None, "cmd:1")
     assert [p.name for p in m.people_of_fact(fid)] == ["Petras"]
     m.add_person("Ugnius", ["ugniui", "ugnius"])
-    assert sorted(p.name for p in m.people_of_fact(fid)) == ["Ugnius", "Petras"]
+    assert sorted(p.name for p in m.people_of_fact(fid)) == ["Petras", "Ugnius"]
     await m.update_fact(fid, "ugnius dirba su mikas")
-    assert sorted(p.name for p in m.people_of_fact(fid)) == ["Ugnius", "Mikas"]
+    assert sorted(p.name for p in m.people_of_fact(fid)) == ["Mikas", "Ugnius"]
 
 
 async def test_people_lines_show_facts_and_relations():

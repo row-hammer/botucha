@@ -93,7 +93,7 @@ async def test_serious_uses_bigger_budget():
 
 
 def test_clean_drops_mangled_member_and_role_labels():
-    raw = "De genier: xdd\nAssistant: labas\nBOT: nu\nhodlinam"
+    raw = "Ta das: xdd\nAssistant: labas\nBOT: nu\nhodlinam"
     assert clean_reply(raw, ["Tadas", "mantas"]) == ["hodlinam"]
 
 

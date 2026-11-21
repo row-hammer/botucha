@@ -30,7 +30,7 @@ def test_single_long_line_kept():
 
 def test_text_format():
     chunks = build_chunks([m(1, 0, "nua na xdd", "mantas"), m(2, 5, "jo", "Tadas")])
-    assert chunks[0].text == "mantas: nua na xdd\nDegeni: jo"
+    assert chunks[0].text == "mantas: nua na xdd\nTadas: jo"
     assert (chunks[0].start_ts, chunks[0].end_ts) == (0, 5)
 
 
