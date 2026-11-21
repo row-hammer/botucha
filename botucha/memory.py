@@ -355,13 +355,20 @@ class Memory:
     # ---- explicit relations between people --------------------------------
     def add_relation(self, a: str, rel: str, b: str, source: str) -> int | None:
         """Link two known people (any name or word form); None if either is unknown. Duplicates return the old id."""
-        pa, pb, rel = self.find_person(a), self.find_person(b), rel.strip().lower()
-        if pa is None or pb is None or pa.id == pb.id or not rel:
+        pa, pb = self.find_person(a), self.find_person(b)
+        if pa is None or pb is None:
+            return None
+        return self.add_relation_ids(pa.id, rel, pb.id, source)
+
+    def add_relation_ids(self, a: int, rel: str, b: int, source: str) -> int | None:
+        """Link two people by id (the dashboard knows exactly whom it means). None if either is unknown."""
+        rel = rel.strip().lower()
+        if a == b or not rel or self.get_person(a) is None or self.get_person(b) is None:
             return None
         self.db.execute("INSERT OR IGNORE INTO relations (a, rel, b, source, created) VALUES (?,?,?,?,?)",
-                        (pa.id, rel, pb.id, source, self.clock()))
+                        (a, rel, b, source, self.clock()))
         self.db.commit()
-        return self.db.execute("SELECT id FROM relations WHERE a=? AND rel=? AND b=?", (pa.id, rel, pb.id)).fetchone()[0]
+        return self.db.execute("SELECT id FROM relations WHERE a=? AND rel=? AND b=?", (a, rel, b)).fetchone()[0]
 
     def relations(self, person_id: int | None = None) -> list[Relation]:
         where, args = ("WHERE a=? OR b=?", (person_id, person_id)) if person_id is not None else ("", ())

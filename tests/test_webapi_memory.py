@@ -103,3 +103,17 @@ async def test_set_aliases_relinks(web):
     assert r.status_code == 200
     assert [p.name for p in deps.memory.people_of_fact(fid)] == ["Ugnius"]
     assert (await client.put("/api/people/999", json={"aliases": []})).status_code == 404
+
+
+async def test_a_relation_links_exactly_the_people_picked_on_the_graph(web):
+    client, deps, _ = await web()
+    mem = deps.memory
+    short, full, ona = mem.add_person("Jonas", []), mem.add_person("Jonas Petraitis", []), mem.add_person("Ona", [])
+    symbol = mem.add_person("🚀", [])  # a name without letters
+    r = await client.post("/api/relations", json={"a": full, "rel": "brolis", "b": ona})
+    r2 = await client.post("/api/relations", json={"a": symbol, "rel": "draugas", "b": ona})
+    assert r.status_code == 200 and r2.status_code == 200
+    got = {(x.a.id, x.rel, x.b.id) for x in mem.relations()}
+    assert got == {(full, "brolis", ona), (symbol, "draugas", ona)} and not any(x.a.id == short for x in mem.relations())
+    again = await client.post("/api/relations", json={"a": full, "rel": "Brolis", "b": ona})
+    assert again.json()["id"] == r.json()["id"]  # same relation, same id

@@ -161,7 +161,7 @@ async def add_relation(request: Request, body: RelationIn) -> dict:
         raise HTTPException(422, f"relation must be 1–{MAX_REL_CHARS} characters")
     if looks_like_instruction(rel):
         raise HTTPException(422, "looks like an instruction to the bot")
-    rid = mem.add_relation(a.name, rel, b.name, "web")
+    rid = mem.add_relation_ids(a.id, rel, b.id, "web")  # by id: a name can resolve to someone else
     if rid is None:
         raise HTTPException(422, "cannot link these people")
     return {"id": rid}
