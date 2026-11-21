@@ -23,10 +23,16 @@ def _user_id(from_id: str | None) -> int | None:
     return int(digits) if digits else None
 
 
+PRIVATE_TYPES = {"personal_chat", "bot_chat", "saved_messages"}
+
+
 def _chat_id(d: dict) -> int:
+    """The Bot API id of the exported chat: -100… for supergroups, the user's own id for a private chat."""
     raw = int(d["id"])
     if d.get("type", "").endswith("supergroup") or d.get("type") == "public_channel":
         return int(f"-100{raw}")
+    if d.get("type") in PRIVATE_TYPES:
+        return raw
     return -raw
 
 

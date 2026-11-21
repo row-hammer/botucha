@@ -68,3 +68,21 @@ async def test_teaching_him_in_a_private_chat_still_works(app):
 
     assert [r[0] for r in store.conn.execute("SELECT text FROM facts")] == ["Tadas turi daug coreweave"]
     assert out.sent[-1][1].startswith("isiminiau")
+
+
+async def test_an_imported_private_chat_is_stored_but_not_learned_from(app, tmp_path):
+    """Review finding: the first-start import learned from any export, so a private chat's export went into
+    the group's facts and profiles."""
+    import json
+    export = tmp_path / "result.json"
+    export.write_text(json.dumps({"id": P, "type": "personal_chat", "messages": [
+        {"id": i + 1, "type": "message", "from": "Tadas", "from_id": "user111", "date_unixtime": str(100 + i * 4000),
+         "text": f"slaptas dalykas {i}"} for i in range(40)]}), encoding="utf-8")
+    bot, store, llm, _ = await app(['{"facts": [{"about": null, "text": "Tadas slepia"}], "slang": []}'] + ["p"] * 5,
+                                   export=export)
+    with_private_chat(bot)
+    await bot.bootstrap()
+    chat = store.conn.execute("SELECT DISTINCT chat_id FROM messages").fetchall()
+    assert chat and chat[0][0] > 0 and store.conn.execute("SELECT COUNT(*) FROM messages").fetchone()[0] == 40
+    assert llm.calls == [] and bot.memory.all_facts() == [] and bot.memory.profiles() == {}
+    assert store.get_state("export_imported") == "1"

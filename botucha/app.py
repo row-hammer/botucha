@@ -786,6 +786,9 @@ class Botucha:
         chat_id, _ = parse_export(export)
         n = import_export(self.store, export)
         log.info("imported %d messages from export", n)
+        if is_private(chat_id):  # kept as history of that chat, but never the group's memory
+            self.store.set_state("export_imported", "1")
+            return
         await self.memory.index_new_chunks(chat_id, force=True)
         stalled = 0  # a chunk the model cannot read is tried twice and then skipped, so this always ends
         while unlearned(self.memory, chat_id) and stalled < 2:

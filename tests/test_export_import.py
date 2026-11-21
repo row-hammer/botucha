@@ -38,3 +38,9 @@ def test_import_is_idempotent():
     assert import_export(s, FIX) == 5
     assert import_export(s, FIX) == 0
     assert s.members()[222].name == "mantas"
+
+
+def test_a_private_chat_export_gets_the_users_own_positive_id():
+    from botucha.export_import import _chat_id
+    assert _chat_id({"id": 4242, "type": "personal_chat"}) == 4242
+    assert _chat_id({"id": 1234567890, "type": "private_supergroup"}) == -1001234567890
