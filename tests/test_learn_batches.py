@@ -140,3 +140,21 @@ async def test_bootstrap_reads_the_whole_import_even_past_a_bad_answer(app, monk
 
     assert cursor(store) == last_chunk(store) and last_chunk(store) >= 1
     assert store.get_state("export_imported") == "1"
+
+
+async def test_profiles_are_refreshed_even_while_a_backlog_is_still_being_read(app):
+    """Review finding: an unfinished backlog skipped the profile refresh every tick, so profiles went stale."""
+    bot, store, _, _ = await app()
+    store.upsert_member(111, "Tadas", "tadas")
+    backlog(250, store)  # more than one tick can read, and past the 200-message profile interval
+    bot.llm = ScriptedLLM(lambda text: EMPTY if text.startswith("pokalbis") or "\n---\n" in text else EMPTY)
+
+    async def chat(messages, *, num_predict, fmt_json=False):
+        return "Tadas kalba apie akcijas." if not fmt_json else EMPTY
+    bot.llm.chat = chat
+    bot.clock = lambda: 1e12
+
+    await bot.learn_tick()
+
+    assert 0 < cursor(store) < last_chunk(store)  # the backlog is not done
+    assert bot.memory.profiles().get(111) == "Tadas kalba apie akcijas."

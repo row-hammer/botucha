@@ -759,12 +759,13 @@ class Botucha:
                 run.finish("error", error=f"{type(e).__name__}: {e}")
                 raise
             run.finish("sent" if n else "skipped", reply=f"{n} new")
+            # profiles follow the messages, not the backlog: a backlog that never quite drains must not stop them
+            if profiles_due(self.store, chat_id) and not self.worker.pending:
+                await refresh_profiles(self.memory, self.llm, self.store, chat_id, locked=self._locked,
+                                       bot_name_regex=self._bot_re)
             if unlearned(self.memory, chat_id):
                 continue  # more to read: the next tick goes on from the cursor
             self.store.set_state(key, str(self.store.last_rowid(chat_id)))
-            if profiles_due(self.store, chat_id):
-                await refresh_profiles(self.memory, self.llm, self.store, chat_id, locked=self._locked,
-                                       bot_name_regex=self._bot_re)
 
     async def learn_loop(self, every_s: float = 60.0) -> None:
         while True:
