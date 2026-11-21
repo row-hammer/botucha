@@ -306,7 +306,11 @@ chunks and returns JSON with facts (about named people) and slang. Rules:
   from it (`/isimink` and `/slengas` typed there still work, because that is teaching him on purpose);
 - profiles are regenerated every ~200 messages.
 
-Malformed JSON skips the run without writing anything.
+A backlog (a first import, a busy day) is read in pieces of about 6,000 characters, at most five model calls per
+idle run, and learning stops between pieces as soon as someone is waiting for a reply; the next run goes on
+where it stopped. An answer that is not valid JSON, usually one cut off at the token limit, is asked again for
+each half of the piece. A single conversation the model cannot read is tried once more on the next run and
+then skipped, so learning never gets stuck on it.
 
 ### The prompt (`brain.py`)
 

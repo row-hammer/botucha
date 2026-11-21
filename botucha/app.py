@@ -26,7 +26,7 @@ from .export_import import import_export, parse_export
 from .feedback import score_for_reactions
 from .proofread import known_words, spelling_notes
 from .prices import DEFAULT_ALIASES, PriceClient, detect_symbols, format_quote
-from .learn import learn_once, profiles_due, refresh_profiles, should_learn
+from .learn import LEARN_MAX_CALLS, learn_once, profiles_due, refresh_profiles, should_learn, unlearned
 from .llm import LLM
 from .memory import Memory
 from .store import Store, StoredMessage
@@ -558,11 +558,15 @@ class Botucha:
             await self.memory.index_new_chunks(chat_id, force=True)
             run = self.tracer.start("learn", chat_id=chat_id, trigger="idle") if self.tracer else NULL_RUN
             try:
-                n = await learn_once(self.memory, self.llm, chat_id, locked=self._locked, run=run)
+                # a bounded piece of the backlog, and none of it while someone waits for a reply
+                n = await learn_once(self.memory, self.llm, chat_id, locked=self._locked, run=run,
+                                     max_calls=LEARN_MAX_CALLS, should_stop=lambda: self.worker.pending)
             except Exception as e:
                 run.finish("error", error=f"{type(e).__name__}: {e}")
                 raise
             run.finish("sent" if n else "skipped", reply=f"{n} new")
+            if unlearned(self.memory, chat_id):
+                continue  # more to read: the next tick goes on from the cursor
             self.store.set_state(key, str(self.store.last_rowid(chat_id)))
             if profiles_due(self.store, chat_id):
                 await refresh_profiles(self.memory, self.llm, self.store, chat_id, locked=self._locked)
@@ -587,7 +591,11 @@ class Botucha:
         n = import_export(self.store, export)
         log.info("imported %d messages from export", n)
         await self.memory.index_new_chunks(chat_id, force=True)
-        await learn_once(self.memory, self.llm, chat_id, locked=self._locked)
+        stalled = 0  # a chunk the model cannot read is tried twice and then skipped, so this always ends
+        while unlearned(self.memory, chat_id) and stalled < 2:
+            before = self.store.get_state(f"learn_cursor:{chat_id}", "0")
+            await learn_once(self.memory, self.llm, chat_id, locked=self._locked)
+            stalled = stalled + 1 if self.store.get_state(f"learn_cursor:{chat_id}", "0") == before else 0
         await refresh_profiles(self.memory, self.llm, self.store, chat_id, locked=self._locked)
         self.store.set_state(f"learned_rowid:{chat_id}", str(self.store.last_rowid(chat_id)))
         self.store.set_state("export_imported", "1")

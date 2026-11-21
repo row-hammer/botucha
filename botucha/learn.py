@@ -3,7 +3,8 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, field
 
 from .guard import MAX_FACT_CHARS, MAX_SLANG_CHARS, looks_like_instruction
 from .llm import LLM, chat_ex
@@ -14,6 +15,9 @@ from .trace import NULL_RUN, TraceRun
 log = logging.getLogger(__name__)
 
 BOT_LINE_PREFIX = "Botucha:"
+SEPARATOR = "\n---\n"
+LEARN_BATCH_CHARS = 6000  # one extraction prompt: about 2,200 tokens, so the answer fits in num_predict
+LEARN_MAX_CALLS = 5  # per idle run: a few minutes at most, then the next tick goes on
 
 EXTRACT_PROMPT = (
     "Tu skaitai lietuviu draugu Telegram grupes pokalbi. Isrink NAUJUS faktus apie grupes narius "
@@ -61,37 +65,65 @@ def resolve_member(about: str | None, store: Store) -> int | None:
     return None
 
 
-async def learn_once(memory: Memory, llm: LLM, chat_id: int, *, source: str = "auto",
-                     locked: frozenset[int] = frozenset(), run: TraceRun = NULL_RUN) -> int:
-    key = f"learn_cursor:{chat_id}"
-    cursor = int(memory.store.get_state(key, "0"))
-    new = memory.chunks_after(chat_id, cursor)
-    if not new:
-        return 0
-    # Botucha's own lines are not the group's language: learning from them would feed his jokes back to him.
-    text = "\n---\n".join("\n".join(l for l in c.text.splitlines() if not l.startswith(BOT_LINE_PREFIX))
-                          for _, c in new)
+def _readable(chunk_text: str) -> str:
+    """Botucha's own lines are not the group's language: learning from them would feed his jokes back to him."""
+    return "\n".join(l for l in chunk_text.splitlines() if not l.startswith(BOT_LINE_PREFIX))
+
+
+def _batches(chunks: list[tuple[int, str]], max_chars: int) -> list[list[tuple[int, str]]]:
+    """Consecutive chunks grouped so that each prompt stays under max_chars (a single longer chunk goes alone)."""
+    out: list[list[tuple[int, str]]] = []
+    size = 0
+    for cid, text in chunks:
+        add = len(text) + (len(SEPARATOR) if out and out[-1] else 0)
+        if out and size + add <= max_chars:
+            out[-1].append((cid, text))
+            size += add
+        else:
+            out.append([(cid, text)])
+            size = len(text)
+    return out
+
+
+def _failed_before(store: Store, chat_id: int, chunk_id: int) -> bool:
+    """True when this chunk already got one unreadable answer; otherwise remembers this first one."""
+    key = f"learn_bad:{chat_id}"
+    if store.get_state(key) == str(chunk_id):
+        return True
+    store.set_state(key, str(chunk_id))
+    return False
+
+
+async def _extract(llm: LLM, group: list[tuple[int, str]], run: TraceRun) -> Extraction | None:
+    text = SEPARATOR.join(t for _, t in group)
     with run.step("extract") as st:
         res = await chat_ex(llm, [{"role": "system", "content": EXTRACT_PROMPT}, {"role": "user", "content": text}],
                             num_predict=800, fmt_json=True)
         raw = res.text
         st.detail.update(res.stats)
-        st.detail.update(chunks=len(new), raw=raw[:500])
+        st.detail.update(chunks=len(group), raw=raw[:500])
         ext = parse_extraction(raw)
         if ext is None:
             st.status = "rejected"
             st.detail["error"] = "invalid JSON"
-    if ext is None:
-        log.warning("learning: model returned invalid JSON, skipping this run")
-        return 0
+    return ext
+
+
+@dataclass
+class _Tally:
+    facts_added: list[str] = field(default_factory=list)
+    facts_rejected: list[dict] = field(default_factory=list)
+    slang_added: list[str] = field(default_factory=list)
+    slang_rejected: list[dict] = field(default_factory=list)
+
+
+async def _store(memory: Memory, ext: Extraction, source: str, locked: frozenset[int], tally: _Tally) -> int:
     n = 0
-    facts_added: list[str] = []
-    facts_rejected: list[dict] = []
     for about, fact in ext.facts:
         if len(fact) > MAX_FACT_CHARS or looks_like_instruction(fact):
             log.warning("learning: skipped instruction-like fact: %.80s", fact)
-            facts_rejected.append({"text": fact[:200],
-                                   "reason": "too_long" if len(fact) > MAX_FACT_CHARS else "instruction"})
+            tally.facts_rejected.append({"text": fact[:200],
+                                         "reason": "too_long" if len(fact) > MAX_FACT_CHARS else "instruction"})
             continue
         uid = resolve_member(about, memory.store)
         person = memory.find_person(about) if about and uid is None else None
@@ -100,31 +132,70 @@ async def learn_once(memory: Memory, llm: LLM, chat_id: int, *, source: str = "a
         # locked under every name: the member the model named, the person it resolved, and anyone the text mentions
         touched = {uid, person.user_id if person else None} | {p.user_id for p in memory.people_in(fact)}
         if touched & locked:
-            facts_rejected.append({"text": fact[:200], "reason": "locked"})
+            tally.facts_rejected.append({"text": fact[:200], "reason": "locked"})
             continue  # owner keeps this member's memory by hand
         _, outcome = await memory.upsert_fact_ex("fact", fact, uid, source)
         if outcome == "kept":
-            facts_rejected.append({"text": fact[:200], "reason": "curated"})  # a person already wrote this one
+            tally.facts_rejected.append({"text": fact[:200], "reason": "curated"})  # a person already wrote this one
             continue
-        facts_added.append(fact)
+        tally.facts_added.append(fact)
         n += 1
-    run.add_step("facts", detail={"added": facts_added, "rejected": facts_rejected})
-    slang_added: list[str] = []
-    slang_rejected: list[dict] = []
     for word, meaning in ext.slang:
         entry = f"{word.lower()} = {meaning}"
         if len(word) + len(meaning) > MAX_SLANG_CHARS or looks_like_instruction(f"{word} {meaning}"):
-            slang_rejected.append({"text": entry[:200], "reason": "too_long" if len(word) + len(meaning) >
-                                   MAX_SLANG_CHARS else "instruction"})
+            tally.slang_rejected.append({"text": entry[:200], "reason": "too_long" if len(word) + len(meaning) >
+                                         MAX_SLANG_CHARS else "instruction"})
             continue
         _, outcome = await memory.upsert_fact_ex("slang", entry, None, source)
         if outcome == "kept":
-            slang_rejected.append({"text": entry[:200], "reason": "curated"})
+            tally.slang_rejected.append({"text": entry[:200], "reason": "curated"})
             continue
-        slang_added.append(entry)
+        tally.slang_added.append(entry)
         n += 1
-    run.add_step("slang", detail={"added": slang_added, "rejected": slang_rejected})
-    memory.store.set_state(key, str(new[-1][0]))
+    return n
+
+
+def unlearned(memory: Memory, chat_id: int) -> bool:
+    """Whether indexed chunks are still waiting to be read."""
+    return bool(memory.chunks_after(chat_id, int(memory.store.get_state(f"learn_cursor:{chat_id}", "0"))))
+
+
+async def learn_once(memory: Memory, llm: LLM, chat_id: int, *, source: str = "auto",
+                     locked: frozenset[int] = frozenset(), run: TraceRun = NULL_RUN,
+                     max_calls: int | None = None, should_stop: Callable[[], bool] | None = None) -> int:
+    """Read the chunks after the cursor in pieces of at most LEARN_BATCH_CHARS and store what the model finds.
+    The cursor moves after every piece, so a run can stop (max_calls, should_stop) and the next one goes on.
+    An unreadable answer, typically one cut off at the token limit, is asked again for each half of the piece.
+    A single chunk that stays unreadable ends the run the first time and is skipped the second time, so
+    learning can neither lose a chunk to one bad answer nor get stuck on it. Returns facts and slang stored."""
+    key = f"learn_cursor:{chat_id}"
+    new = memory.chunks_after(chat_id, int(memory.store.get_state(key, "0")))
+    if not new:
+        return 0
+    queue = _batches([(cid, _readable(c.text)) for cid, c in new], LEARN_BATCH_CHARS)
+    tally, n, calls, read = _Tally(), 0, 0, False
+    while queue:
+        if (max_calls is not None and calls >= max_calls) or (calls and should_stop is not None and should_stop()):
+            break
+        group = queue.pop(0)
+        ext = await _extract(llm, group, run)
+        calls += 1
+        if ext is None and len(group) > 1:
+            mid = len(group) // 2
+            queue[:0] = [group[:mid], group[mid:]]
+            continue
+        if ext is None:
+            if not _failed_before(memory.store, chat_id, group[0][0]):
+                log.warning("learning: model returned invalid JSON, skipping this run")
+                break
+            log.warning("learning: chunk %d was unreadable twice, moving on without it", group[0][0])
+        else:
+            n += await _store(memory, ext, source, locked, tally)
+            read = True
+        memory.store.set_state(key, str(group[-1][0]))
+    if read:
+        run.add_step("facts", detail={"added": tally.facts_added, "rejected": tally.facts_rejected})
+        run.add_step("slang", detail={"added": tally.slang_added, "rejected": tally.slang_rejected})
     return n
 
 
