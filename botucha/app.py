@@ -342,6 +342,13 @@ class Botucha:
         words.update(known_words(self.store))  # approved on the dashboard (e.g. slang Claude judged real)
         return words
 
+    def _people_in_view(self, history: list[StoredMessage]) -> set[int]:
+        """People this conversation is about: everyone named in it (any word form) and everyone who wrote in it.
+        Only their lines go into the prompt; everyone's facts in every reply cost about 2 s of prompt reading."""
+        ids = {p.id for p in self.memory.people_in("\n".join(m.text for m in history))}
+        authors = {m.user_id for m in history}
+        return ids | {p.id for p in self.memory.people() if p.user_id in authors}
+
     def _member_names(self) -> list[str]:
         names = []
         for mem in self.store.members().values():
@@ -410,7 +417,7 @@ class Botucha:
             ctx = PromptContext(
                 persona=_read(self.cfg.paths.persona), style_examples=_read(self.cfg.paths.style_examples),
                 profiles={members[u].name: p for u, p in self.memory.profiles().items() if u in members},
-                slang=self.memory.all_slang(), people=self.memory.people_lines(),
+                slang=self.memory.all_slang(), people=self.memory.people_lines(only=self._people_in_view(history)),
                 chunks=[h.chunk.text for h in hits], facts=[f.text for f in facts], history=history,
                 bot_user_id=self.bot_user_id, serious=any(j.serious for j in jobs), prices=prices, image=image,
                 spelling_notes=spelling_notes(self.store))

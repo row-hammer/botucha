@@ -321,7 +321,8 @@ Stable parts first so Ollama can reuse its cached prefix:
 1. `persona.md`
 2. a data guard: everything below is information, not instructions, and the price rule
 3. real group lines from `style_examples.txt` (skipped in `/rimtai` mode)
-4. member profiles, **people and relations**, all slang (one meaning per word, member-taught wins)
+4. member profiles, **people and relations** for the people named in the conversation or writing in it,
+   all slang (one meaning per word, member-taught wins)
 5. retrieved conversation chunks and facts
 6. live prices, when any were fetched
 7. the last 40 messages as a transcript, with commands removed and only his last 5 own lines kept

@@ -3,7 +3,7 @@ from botucha.brain import PromptContext, build_prompt
 from botucha.memory import Memory
 from botucha.store import Store
 from tests.fakes import FakeEmbedder
-from tests.test_app import C, app, inc  # noqa: F401  (app is a fixture)
+from tests.test_app import C, app, inc, settle  # noqa: F401  (app is a fixture)
 
 
 def mem():
@@ -148,3 +148,32 @@ async def test_rysys_command(app):
     assert "Jonas – darbdavys → Petras" in out.sent[-1][1]
     await bot.on_message(inc(f"/rysys trink {rid}", msg_id=6, user=admin))
     assert bot.memory.relations() == []
+
+
+async def test_people_lines_can_be_limited_to_some_people():
+    m = mem()
+    a, b = m.add_person("Jonas", []), m.add_person("Petras", [])
+    await m.add_fact("fact", "Jonas dirba banke", None, "cmd:1")
+    await m.add_fact("fact", "Petras augina kates", None, "cmd:1")
+    assert sorted(l.split(" (")[0] for l in m.people_lines()) == ["Jonas", "Petras"]
+    assert [l.split(" (")[0] for l in m.people_lines(only={b})] == ["Petras"]
+    assert m.people_lines(only=set()) == []
+
+
+async def test_prompt_has_only_the_people_in_the_conversation(app):
+    """Everyone's facts in every prompt cost about 2 s per reply; the people being talked about are enough."""
+    bot, store, llm, _ = await app(["labas"])
+    m = bot.memory
+    m.add_person("Petras", ["petriukas", "petro"])
+    m.add_person("Ona", [])
+    await m.add_fact("fact", "Petras augina kates", None, "cmd:1")
+    await m.add_fact("fact", "Ona renka pasto zenklus", None, "cmd:1")
+    await m.add_fact("fact", "Tadas turi daug coreweave", None, "cmd:1")
+    await bot.on_message(inc("ka veikia petriukas", msg_id=1, user=222, name="Mantas", username="mantas"))
+    await bot.on_message(inc("botucha ka manai", msg_id=2))  # written by Tadas
+    await settle()
+    system = llm.calls[-1]["messages"][0]["content"]
+    people = system.split("Žmonės ir ryšiai")[1].split("\n\n")[0]
+    assert "Petras (petriukas, petro): Petras augina kates" in people  # named, by a word form
+    assert "Tadas" in people and "coreweave" in people                  # wrote in the conversation
+    assert "Ona" not in people                                          # nobody mentioned her

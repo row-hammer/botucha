@@ -366,11 +366,14 @@ class Memory:
         self.db.commit()
         return n > 0
 
-    def people_lines(self, max_facts: int = 6) -> list[str]:
+    def people_lines(self, max_facts: int = 6, only: set[int] | None = None) -> list[str]:
         """One line per person with facts or relations:
-        'Name (aliases): fact; fact. Ryšiai: A – rel → B. Susiję: C' (Susiję = only co-mentioned in facts)."""
+        'Name (aliases): fact; fact. Ryšiai: A – rel → B. Susiję: C' (Susiję = only co-mentioned in facts).
+        only = person ids to include (None = everyone)."""
         lines = []
         for p in self.people():
+            if only is not None and p.id not in only:
+                continue
             facts = [f.text.rstrip(".") for f in self.person_facts(p.id)][:max_facts]
             rels = self.relations(p.id)
             linked = {r.a.id for r in rels} | {r.b.id for r in rels}
