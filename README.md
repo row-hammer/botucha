@@ -398,6 +398,8 @@ The report flags replies that are empty, too long (except `/rimtai`) or written 
 - **Retention:** he keeps every message in his database. A Telegram auto-delete timer removes messages from
   Telegram, **not** from his memory. Tell your group.
 - `/ka_zinai` shows anyone what is stored about them; `/pamirsk` deletes a fact.
+- **Backups:** once a day the bot copies the database to `backups/daily/botucha-YYYY-MM-DD.db` (SQLite online
+  backup, integrity-checked, mode 600) and keeps the last 7. Restore: stop the bot, copy one over `botucha.db`.
 
 ## Security model
 

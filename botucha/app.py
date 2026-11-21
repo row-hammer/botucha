@@ -3,6 +3,7 @@ Telegram specifics live in __main__.py behind the Outbox protocol and the Incomi
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
 import logging
 import re
 from collections import defaultdict, deque
@@ -10,8 +11,10 @@ import random
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Protocol
 
+from .backup import daily_backup
 from .brain import PromptContext, generate_reply_ex
 from .commands import CommandContext, handle_command, load_trigger_state, message_link, parse_command
 from .config import Config
@@ -126,12 +129,24 @@ class Botucha:
             except Exception as e:
                 log.warning("state sync failed: %s", e)
 
+    def maintenance_tick(self) -> None:
+        """Hourly: drop old traces, and make today's database backup if there is none yet."""
+        try:
+            prune_traces(self.store, self.clock())
+        except Exception as e:
+            log.warning("trace cleanup failed: %s", e)
+        try:
+            folder = Path(self.cfg.paths.db).parent / "backups" / "daily"
+            made = daily_backup(self.store.conn, folder, dt.date.fromtimestamp(self.clock()))
+            if made:
+                log.info("database backup written: %s", made.name)
+        except Exception as e:
+            log.warning("database backup failed: %s", e)
+            self.last_error = f"backup: {type(e).__name__}: {e}"
+
     async def maintenance_loop(self, every_s: float = 3600.0) -> None:
         while True:
-            try:
-                prune_traces(self.store, self.clock())
-            except Exception as e:
-                log.warning("trace cleanup failed: %s", e)
+            self.maintenance_tick()  # same connection as the bot; a few MB copy in well under a second
             await asyncio.sleep(every_s)
 
     # ---- incoming --------------------------------------------------------
