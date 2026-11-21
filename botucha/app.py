@@ -28,7 +28,7 @@ from .proofread import known_words, spelling_notes
 from .prices import DEFAULT_ALIASES, PriceClient, detect_symbols, format_quote
 from .learn import LEARN_MAX_CALLS, learn_once, profiles_due, refresh_profiles, should_learn, unlearned
 from .llm import LLM
-from .memory import Memory
+from .memory import EMBED_BATCH, Memory
 from .store import Store, StoredMessage
 from .trace import NULL_RUN, Tracer, prune_traces
 from .trigger import Decision, decide_with_reason, fold, is_direct, is_recall, mark_unsolicited
@@ -363,7 +363,10 @@ class Botucha:
                if self.tracer else NULL_RUN)
         result, hits = None, []
         try:
-            await self.memory.index_new_chunks(chat_id)
+            try:  # one request's worth: a backlog is the learning loop's job, not this reply's
+                await self.memory.index_new_chunks(chat_id, limit=EMBED_BATCH)
+            except Exception as e:
+                log.warning("chunk indexing failed, replying without it: %s", e)
             ids = {j.msg_id for j in jobs}
             with run.step("context") as st:
                 recent = self.store.recent_messages(chat_id, HISTORY_N)
@@ -379,8 +382,15 @@ class Botucha:
             query = "\n".join(caption_of(m.text) for m in history if m.msg_id in ids).strip() \
                 or (caption_of(history[-1].text) if history else "")
             with run.step("retrieval") as st:
-                hits = await self.memory.search_chunks(query, k=6 if recall else 3, chat_id=chat_id) if query else []
-                scored = await self.memory.search_facts_scored(query, k=5) if query else []
+                scored = []
+                try:
+                    hits = await self.memory.search_chunks(query, k=6 if recall else 3, chat_id=chat_id) if query else []
+                    scored = await self.memory.search_facts_scored(query, k=5) if query else []
+                except Exception as e:  # the embedding model is down: an answer without memory beats no answer
+                    log.warning("memory search failed, replying without it: %s", e)
+                    hits, scored = [], []
+                    st.status = "error"
+                    st.detail["error"] = f"{type(e).__name__}: {e}"
                 facts = [f for f, _, _ in scored]
                 prices = [format_quote(q) for q in await self.prices.quotes(detect_symbols(query, self.aliases))] \
                     if self.prices else []

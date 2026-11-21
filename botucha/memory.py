@@ -16,6 +16,7 @@ from .store import Store
 
 GAP_S = 1800
 DEDUPE_COS = 0.88
+EMBED_BATCH = 32  # chunks per embedding request: a few seconds on CPU, far from the client timeout
 FactKind = Literal["fact", "slang"]
 
 
@@ -80,11 +81,14 @@ class Memory:
         self._index_lock = asyncio.Lock()
 
     # ---- chunks ---------------------------------------------------------
-    async def index_new_chunks(self, chat_id: int, *, force: bool = False) -> int:
+    async def index_new_chunks(self, chat_id: int, *, force: bool = False, limit: int | None = None) -> int:
+        """Embed and store the chunks closed since the last call, at most limit of them.
+        They go to the embedder EMBED_BATCH at a time and each batch is saved with its cursor, so a
+        failure halfway keeps what was done and the next call goes on from there."""
         async with self._index_lock:  # reply worker, learning and bootstrap may call this concurrently
-            return await self._index_new_chunks(chat_id, force)
+            return await self._index_new_chunks(chat_id, force, limit)
 
-    async def _index_new_chunks(self, chat_id: int, force: bool) -> int:
+    async def _index_new_chunks(self, chat_id: int, force: bool, limit: int | None) -> int:
         key = f"chunk_cursor:{chat_id}"
         cursor = int(self.store.get_state(key, "0"))
         rows = self.store.messages_after(chat_id, cursor)
@@ -94,17 +98,22 @@ class Memory:
         chunks = build_chunks([m for _, m in rows], gap_s=GAP_S)
         if not force and chunks and self.clock() - chunks[-1].end_ts <= GAP_S:
             chunks = chunks[:-1]  # still open: more messages may join it
-        if not chunks:
-            return 0
-        embs = await self.embedder.embed([c.text for c in chunks])
-        for c, e in zip(chunks, embs):
-            cur = self.db.execute(
-                "INSERT INTO chunks (chat_id, first_msg_id, last_msg_id, start_ts, end_ts, text, emb) "
-                "VALUES (?,?,?,?,?,?,?)",
-                (c.chat_id, c.first_msg_id, c.last_msg_id, c.start_ts, c.end_ts, c.text, _blob(e)))
-            self.db.execute("INSERT INTO chunks_fts (rowid, text) VALUES (?,?)", (cur.lastrowid, c.text))
-        self.db.commit()
-        self.store.set_state(key, str(rowid_of[chunks[-1].last_msg_id]))
+        if limit is not None:
+            chunks = chunks[:limit]
+        for i in range(0, len(chunks), EMBED_BATCH):
+            part = chunks[i:i + EMBED_BATCH]
+            embs = await self.embedder.embed([c.text for c in part])
+            for c, e in zip(part, embs):
+                cur = self.db.execute(
+                    "INSERT INTO chunks (chat_id, first_msg_id, last_msg_id, start_ts, end_ts, text, emb) "
+                    "VALUES (?,?,?,?,?,?,?)",
+                    (c.chat_id, c.first_msg_id, c.last_msg_id, c.start_ts, c.end_ts, c.text, _blob(e)))
+                self.db.execute("INSERT INTO chunks_fts (rowid, text) VALUES (?,?)", (cur.lastrowid, c.text))
+            # same transaction as the chunks: a crash can never leave them stored but not counted
+            self.db.execute("INSERT INTO state (key, value) VALUES (?,?) "
+                            "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                            (key, str(rowid_of[part[-1].last_msg_id])))
+            self.db.commit()
         return len(chunks)
 
     def chunks_after(self, chat_id: int, chunk_id: int) -> list[tuple[int, Chunk]]:

@@ -289,7 +289,9 @@ Everything lives in `botucha.db`:
 
 Search is hybrid: FTS5 top 10 ∪ cosine top 10, ranked by cosine. `bge-m3` runs on CPU (`num_gpu: 0`) so it
 never competes with the chat model for VRAM. A recall phrase ("atsimeni", "pamenat", …) or `/atsimeni`
-retrieves more chunks.
+retrieves more chunks. New chunks are embedded 32 at a time and saved after each request; a reply indexes one
+request's worth at most and leaves a backlog to the learning loop. If the embedding model is down he still
+answers, just without memory (the trace shows the failed search).
 
 ### Learning (`learn.py`)
 
