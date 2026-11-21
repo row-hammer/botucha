@@ -449,7 +449,17 @@ The report flags replies that are empty, too long (except `/rimtai`) or written 
   Telegram, **not** from his memory. Tell your group.
 - `/ka_zinai` shows anyone what is stored about them; `/pamirsk` deletes a fact.
 - **Backups:** once a day the bot copies the database to `backups/daily/botucha-YYYY-MM-DD.db` (SQLite online
-  backup, integrity-checked, mode 600) and keeps the last 7. Restore: stop the bot, copy one over `botucha.db`.
+  backup, integrity-checked, mode 600) and keeps the last 7.
+- **Restore:** stop **both** services, then run the restore command:
+  ```bash
+  systemctl --user stop botucha botucha-web
+  uv run python -m botucha.restore backups/daily/botucha-YYYY-MM-DD.db --config config.toml
+  systemctl --user start botucha botucha-web
+  ```
+  It refuses while anything still has the database open, keeps the current one as
+  `backups/botucha-before-restore-<time>.db`, and removes the leftover `botucha.db-wal` / `-shm` files. Do not
+  copy a backup over `botucha.db` by hand: a leftover write-ahead log is replayed onto the copied file, and
+  the result silently mixes old and new data while still passing an integrity check.
 
 ## Security model
 
@@ -511,6 +521,8 @@ botucha/
   style.py         pick real group lines as style examples
   evaluation.py    persona / memory eval and offline bootstrap
   trace.py         step traces of replies and learning runs
+  backup.py        daily database copy
+  restore.py       put a backup back safely (python -m botucha.restore)
   webapi/          local dashboard API (FastAPI): status, traces, metrics, memory, people, ratings, settings
 data/hunspell/     Lithuanian hunspell dictionary (LibreOffice, BSD licence, see COPYING)
 deploy/            systemd user units (bot, web dashboard)
