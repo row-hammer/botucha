@@ -329,7 +329,8 @@ The **user message** holds what changes:
 6. a second data guard, then **people and relations** for the people named in the conversation or writing in
    it, retrieved conversation chunks and facts, live prices when any were fetched (and the image guard when he
    looks at a photo)
-7. the instruction to reply
+7. the message(s) he is answering, when that is not simply the last line (a mention followed by other
+   chatter, or one that scrolled out of the transcript), then the instruction to reply
 
 Why this order: on this setup Ollama cannot reuse a cached prompt that changes more than a few hundred tokens
 before its end, which every reply's retrieval did, so each reply read all ~7,000 prompt tokens again (13–16 s).

@@ -449,7 +449,8 @@ class Botucha:
                 serious=any(j.serious for j in jobs),
                 people=self.memory.people_lines(only=self._people_in_view(history)),
                 chunks=[h.chunk.text for h in hits], facts=[f.text for f in facts], history=history,
-                prices=prices, image=image)
+                prices=prices, image=image,
+                targets=[t for j in jobs if (t := self.store.get_message(chat_id, j.msg_id))])
             await self.outbox.typing(chat_id)
             if not ctx.serious:  # /rimtai has its own system message: warming it would evict the usual one
                 await self.warm_prompt(stable_prompt(ctx))  # only sends when it changed (persona, profiles, slang…)
