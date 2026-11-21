@@ -139,3 +139,15 @@ async def test_config_min_p_editable_within_range(web):
     assert (await client.put("/api/config", json={"values": {"model.min_p": 0.1}})).status_code == 200
     assert load_config(deps.config_path, {"BOTUCHA_TOKEN": "x"}).model.min_p == 0.1
     assert (await client.get("/api/config")).json()["values"]["model.min_p"] == 0.1
+
+
+async def test_saving_the_reply_frequency_also_sets_the_live_value(web):
+    """/daznis and the Controls page store the live value in the state table, and it wins over the config at
+    start. A frequency saved in Settings must not be silently ignored because of an older /daznis."""
+    client, deps, _ = await web()
+    deps.store.set_state("random_n", "40")
+    r = await client.put("/api/config", json={"values": {"trigger.random_n": 10}})
+    assert r.status_code == 200 and deps.store.get_state("random_n") == "10"
+    assert (await client.get("/api/status")).json()["random_n"] == 10
+    await client.put("/api/config", json={"values": {"model.temperature": 0.5}})
+    assert deps.store.get_state("random_n") == "10"  # other saves leave it alone

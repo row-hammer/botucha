@@ -111,4 +111,6 @@ async def put_config(request: Request, body: ConfigIn) -> dict:
     backup(deps, path, "config", ".toml")
     write_private(path, text)
     deps.cfg = new_cfg
+    if "trigger.random_n" in checked:  # the live value (/daznis, Controls) would otherwise win over this save
+        deps.store.set_state("random_n", str(checked["trigger.random_n"]))
     return {"ok": True, "restart_required": True}

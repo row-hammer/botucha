@@ -429,7 +429,7 @@ vision, photos are kept as text only.
 | `model.min_p` | 0.05 | drops unlikely tokens, which cuts invented words (0 = off) |
 | `trigger.keywords` | spx, vwce, akcij, … | word prefixes for uninvited replies |
 | `trigger.keyword_prob` | 0.5 | chance to reply on a keyword |
-| `trigger.random_n` | 25 | random reply 1 in n messages (`/daznis` changes it) |
+| `trigger.random_n` | 25 | random reply 1 in n messages; `/daznis`, Controls and Settings all set the live value at once |
 | `trigger.cooldown_s` | 180 | minimum seconds between uninvited replies |
 | `trigger.reaction_n` / `reactions` | 15 / 🤡 🗿 … | chance and emoji for reactions (must be Telegram's allowed reactions) |
 | `trigger.burst_quiet_s` / `burst_max_s` | 5 / 20 | burst waiting |
