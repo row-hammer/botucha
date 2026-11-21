@@ -114,11 +114,16 @@ def set_known_word(store: Store, word: str, known: bool, *, now: float, source: 
 
 def spelling_notes(store: Store, n: int = 15) -> list[str]:
     """Most frequent corrections as prompt notes, e.g. "nužvelgei (ne nužvalgai)"."""
-    rows = store.conn.execute(
-        "SELECT lower(word), fix, COUNT(*) AS c, MAX(ts) FROM spell_fixes WHERE verdict='fix' AND fix IS NOT NULL "
-        "GROUP BY lower(word), fix ORDER BY c DESC, MAX(ts) DESC", ()).fetchall()
+    # grouped in Python: SQLite's lower() leaves Lithuanian capitals (Ž, Š, …) as they are
+    groups: dict[tuple[str, str], list[float]] = {}
+    for word, fix, ts in store.conn.execute(
+            "SELECT word, fix, ts FROM spell_fixes WHERE verdict='fix' AND fix IS NOT NULL"):
+        g = groups.setdefault((word.lower(), fix), [0, 0.0])
+        g[0] += 1
+        g[1] = max(g[1], ts)
     known = known_words(store)  # approved as a real word: the 'fix' was wrong, so it is no note
-    return [f"{fix} (ne {word})" for word, fix, _, _ in rows if fold(word) not in known][:n]
+    ranked = sorted(groups.items(), key=lambda kv: (-kv[1][0], -kv[1][1]))
+    return [f"{fix} (ne {word})" for (word, fix), _ in ranked if fold(word) not in known][:n]
 
 
 class ClaudeProofreader:

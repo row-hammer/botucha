@@ -129,9 +129,10 @@ def _latest_verdicts(store: Store, words: list[str]) -> dict[str, dict]:
     """Claude's most recent verdict per word (lower-case), when it judged that word."""
     if not words:
         return {}
+    wanted = set(words)
     out: dict[str, dict] = {}
-    marks = ",".join("?" * len(words))
-    for word, verdict, fix in store.conn.execute(
-            f"SELECT lower(word), verdict, fix FROM spell_fixes WHERE lower(word) IN ({marks}) ORDER BY id", words):
-        out[word] = {"verdict": verdict, "fix": fix}
+    # matched in Python: SQLite's lower() leaves Lithuanian capitals (Ž, Š, …) as they are
+    for word, verdict, fix in store.conn.execute("SELECT word, verdict, fix FROM spell_fixes ORDER BY id"):
+        if word.lower() in wanted:
+            out[word.lower()] = {"verdict": verdict, "fix": fix}
     return out

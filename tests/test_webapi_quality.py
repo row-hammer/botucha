@@ -103,3 +103,23 @@ async def test_quality_endpoint(web):
     body = (await client.get("/api/quality?range=24h")).json()
     assert body["words"][0]["word"] == "glichiuoja" and body["context"]["limit"] == deps.cfg.model.num_ctx
     assert (await client.get("/api/quality?range=2d")).status_code == 422
+
+
+def test_claude_verdicts_match_words_with_lithuanian_capitals(store):
+    """Review finding: SQLite's lower() only folds ASCII, so 'Žiūrėk' never matched the page's 'žiūrėk'."""
+    reply(store, flagged=[("Žiūrėk",)], started=NOW - 300)
+    store.conn.execute("INSERT INTO spell_fixes (ts, word, verdict, fix, model) VALUES (1, 'Žiūrėk', 'keep', NULL, 'm')")
+    store.conn.commit()
+    q = compute_quality(store, NOW, "24h", num_ctx=32768, tz=UTC)
+    [w] = q["words"]
+    assert w["word"] == "žiūrėk" and w["claude"] == {"verdict": "keep", "fix": None}
+
+
+def test_spelling_notes_count_a_word_once_whatever_its_case():
+    from botucha.proofread import spelling_notes
+    s = Store(":memory:")
+    for word in ("Šlaminės", "šlaminės", "ŠLAMINĖS"):
+        s.conn.execute("INSERT INTO spell_fixes (ts, word, verdict, fix, model) VALUES (1, ?, 'fix', 'šlamštinės', 'm')", (word,))
+    s.conn.execute("INSERT INTO spell_fixes (ts, word, verdict, fix, model) VALUES (2, 'kitas', 'fix', 'kitąs', 'm')")
+    s.conn.commit()
+    assert spelling_notes(s) == ["šlamštinės (ne šlaminės)", "kitąs (ne kitas)"]
