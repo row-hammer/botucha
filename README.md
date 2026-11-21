@@ -18,7 +18,7 @@ knows who is who, and runs entirely on your own PC.
 
 ---
 
-## ✨ Highlights
+## Highlights
 
 - **A member, not an assistant.** Short lowercase messages in the group's own slang (Lithuanian in the
   example), dry and sometimes dark humor. The persona is one text file you edit.
@@ -37,7 +37,7 @@ knows who is who, and runs entirely on your own PC.
 - **A local dashboard.** Charts, a step-by-step graph of how every reply was made, memory and people
   editing, ratings, controls and settings, in English or Lithuanian.
 
-## 🧭 How it works
+## How it works
 
 ```mermaid
 flowchart LR
@@ -54,7 +54,7 @@ flowchart LR
 
 The details, rules and reasons for each step are in **[docs/how-it-works.md](docs/how-it-works.md)**.
 
-## 🚀 Quick start
+## Quick start
 
 **You need** a Linux PC with an NVIDIA GPU (developed on 16 GB VRAM), [Ollama](https://ollama.com),
 [uv](https://docs.astral.sh/uv/), `hunspell` (optional) and a bot token from [@BotFather](https://t.me/BotFather).
@@ -94,7 +94,7 @@ loginctl enable-linger "$USER"                      # keep running when logged o
 The units assume `~/Projects/botucha` and uv from mise; edit `WorkingDirectory` and `ExecStart` if yours differ.
 The dashboard is at **http://127.0.0.1:8765**.
 
-## 💬 Commands
+## Commands
 
 | Everyone | |
 |---|---|
@@ -121,7 +121,7 @@ The dashboard is at **http://127.0.0.1:8765**.
 
 </details>
 
-## 🔒 Privacy
+## Privacy
 
 - **Stays on your PC:** the model, the embeddings and the database. Private files (`botucha.db`, `.env`,
   `config.toml`, `persona.md`, backups) are git-ignored and mode 600.
@@ -131,7 +131,7 @@ The dashboard is at **http://127.0.0.1:8765**.
 - **Backups** are made daily. Restore with `python -m botucha.restore`, never by copying the file
   ([why](docs/how-it-works.md#backups-and-restore)).
 
-## 🛠 Development
+## Development
 
 ```bash
 uv run pytest                                                       # no Telegram, Ollama or GPU needed
@@ -139,7 +139,7 @@ cd web && npm run check && npm run test:i18n && npm run test:unit   # lint, tran
 cd web && npm run build:static && npm run test:e2e                  # Playwright on a seeded test server
 ```
 
-## ❓ Troubleshooting
+## Troubleshooting
 
 | Symptom | Fix |
 |---|---|
