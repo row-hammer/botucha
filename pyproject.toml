@@ -2,6 +2,8 @@
 name = "botucha"
 version = "0.1.0"
 description = "Botucha: a local Telegram group bot with memory"
+license = "MIT"
+license-files = ["LICENSE", "data/hunspell/COPYING"]
 requires-python = ">=3.12"
 dependencies = [
     "aiogram>=3.33,<4",
