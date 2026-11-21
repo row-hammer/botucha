@@ -11,6 +11,7 @@ from fastapi.responses import StreamingResponse
 
 from ..store import Store
 from .metrics import Range, compute_metrics
+from .pipeline import compute_pipeline, traces_on_path
 from .routes_status import status_body
 
 router = APIRouter()
@@ -47,8 +48,20 @@ def list_traces(store: Store, *, kind: str | None = None, outcome: str | None = 
 
 @router.get("/api/traces")
 async def traces(request: Request, kind: str | None = None, outcome: str | None = None,
-                 before_id: int | None = None, limit: int = Query(50, ge=1, le=200)) -> list[dict]:
-    return list_traces(request.app.state.deps.store, kind=kind, outcome=outcome, before_id=before_id, limit=limit)
+                 before_id: int | None = None, limit: int = Query(50, ge=1, le=200),
+                 path: str | None = None, range: Range = "30d") -> list[dict]:  # noqa: A002
+    deps = request.app.state.deps
+    if path:  # drill-down from the Pipeline page: replies that passed through one node
+        ids = traces_on_path(deps.store, path, deps.clock(), range)
+        if before_id is not None:
+            ids = [i for i in ids if i < before_id]
+        ids = ids[:limit]
+        if not ids:
+            return []
+        rows = deps.store.conn.execute(f"SELECT {_COLS}, {_ATTEMPTS} FROM traces WHERE id IN "
+                                       f"({','.join('?' * len(ids))}) ORDER BY id DESC", ids).fetchall()
+        return [_summary(r) for r in rows]
+    return list_traces(deps.store, kind=kind, outcome=outcome, before_id=before_id, limit=limit)
 
 
 @router.get("/api/traces/by-message")
@@ -86,6 +99,12 @@ async def metrics(request: Request, range: Range = "24h") -> dict:  # noqa: A002
     return compute_metrics(deps.store, deps.clock(), range)
 
 
+@router.get("/api/pipeline")
+async def pipeline(request: Request, range: Range = "24h") -> dict:  # noqa: A002  (query parameter name)
+    deps = request.app.state.deps
+    return compute_pipeline(deps.store, deps.clock(), range)
+
+
 def _event(name: str, data: object) -> str:
     return f"event: {name}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
@@ -105,6 +124,7 @@ async def live_events(store: Store, status: Callable[[], Awaitable[dict]], *, po
     if running is not None:
         floor = min(floor, running - 1)
     emitted: set[int] = set()
+    progress: dict[int, int] = {}  # running trace id -> steps already reported
     yield _event("status", await status())
     sent_status = time.monotonic()
     while True:
@@ -117,6 +137,8 @@ async def live_events(store: Store, status: Callable[[], Awaitable[dict]], *, po
                     yield _event("trace", t)
             elif t["started"] >= clock() - STUCK_S:
                 pending.append(t["id"])
+        for ev in _progress(store, [t for t in rows if t["id"] in pending], progress):
+            yield ev
         if rows:
             floor = min(pending) - 1 if pending else rows[-1]["id"]
             emitted = {i for i in emitted if i > floor}
@@ -124,6 +146,25 @@ async def live_events(store: Store, status: Callable[[], Awaitable[dict]], *, po
             yield _event("status", await status())
             sent_status = time.monotonic()
         await asyncio.sleep(poll_s)
+
+
+def _progress(store: Store, running: list[dict], seen: dict[int, int]) -> list[str]:
+    """A progress event for each running trace that wrote a new step since the last poll."""
+    out = []
+    for t in running:
+        n, last = store.conn.execute(
+            "SELECT COUNT(*), (SELECT kind || char(31) || COALESCE(name, '') || char(31) || status FROM trace_steps "
+            "WHERE trace_id=? ORDER BY seq DESC LIMIT 1) FROM trace_steps WHERE trace_id=?",
+            (t["id"], t["id"])).fetchone()
+        if n and seen.get(t["id"]) != n:
+            seen[t["id"]] = n
+            kind, name, status = last.split("\x1f")
+            out.append(_event("progress", {"id": t["id"], "kind": t["kind"], "user_name": t["user_name"],
+                                           "trigger": t["trigger"], "started": t["started"], "steps": n,
+                                           "last": {"kind": kind, "name": name or None, "status": status}}))
+    for tid in [i for i in seen if i not in {t["id"] for t in running}]:
+        del seen[tid]
+    return out
 
 
 @router.get("/api/live")
