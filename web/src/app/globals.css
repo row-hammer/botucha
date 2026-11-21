@@ -16,9 +16,9 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  /* the same font as the terminal (installed on this PC; the dashboard only runs locally) */
-  --font-sans: "Terminess Nerd Font", "Terminess Nerd Font Propo", "Terminess Nerd Font Mono", ui-monospace, monospace;
-  --font-mono: "Terminess Nerd Font Mono", "Terminess Nerd Font", ui-monospace, monospace;
+  /* Geist, the same fonts as ARTEX */
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
   --color-popover: var(--popover);
