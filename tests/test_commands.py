@@ -113,3 +113,9 @@ async def test_tyla_is_capped_at_a_week(ctx):
     assert ctx.state.quiet_until == 0.0 and str(MAX_TYLA_MIN) in reply
     await run(ctx, f"/tyla {MAX_TYLA_MIN}", now=1000.0)
     assert ctx.state.quiet_until == 1000.0 + MAX_TYLA_MIN * 60
+
+
+def test_message_links_exist_only_in_supergroups():
+    assert message_link(-1001234567890, 5) == "https://t.me/c/1234567890/5"
+    assert message_link(4242, 5) is None       # a private chat has no message links
+    assert message_link(-4242, 5) is None      # nor does a basic group

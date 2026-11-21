@@ -37,7 +37,10 @@ def parse_command(text: str, bot_username: str) -> tuple[str, str] | None:
     return m.group(1).lower(), (m.group(3) or "").strip()
 
 
-def message_link(chat_id: int, msg_id: int) -> str:
+def message_link(chat_id: int, msg_id: int) -> str | None:
+    """t.me link to a message. Only supergroups (ids -100…) have them; None for private chats and basic groups."""
+    if chat_id > -10**12:
+        return None
     return f"https://t.me/c/{abs(chat_id) - 10**12}/{msg_id}"
 
 

@@ -576,7 +576,9 @@ class Botucha:
                 await self._send(chat_id, [CANNED], direct[-1].msg_id, store=False)
             return
         if links and hits:
-            texts = texts + [" ".join(message_link(h.chunk.chat_id, h.chunk.first_msg_id) for h in hits[:3])]
+            urls = [u for h in hits[:3] if (u := message_link(h.chunk.chat_id, h.chunk.first_msg_id))]
+            if urls:  # a private chat has no message links
+                texts = texts + [" ".join(urls)]
         with run.step("send") as st:
             sent = await self._send(chat_id, texts, direct[-1].msg_id if direct else None, store=True)
             st.detail["msg_ids"] = sent
