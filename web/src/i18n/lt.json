@@ -89,7 +89,8 @@
     "leak": "personos nutekėjimas",
     "repeat": "kartojimas",
     "foreign": "svetimi rašmenys",
-    "spelling": "rašyba"
+    "spelling": "rašyba",
+    "description": "aprašymas"
   },
   "thinking": {
     "cols": {
@@ -104,7 +105,8 @@
     "kind": {
       "all": "Visi",
       "reply": "Atsakymai",
-      "learn": "Mokymasis"
+      "learn": "Mokymasis",
+      "describe": "Paveikslėlių aprašymai"
     },
     "outcome": {
       "all": "Visi rezultatai",
@@ -128,7 +130,8 @@
       "reaction": "reakcija",
       "idle": "mokymasis ramiu metu",
       "keyword": "raktažodis „{k}“",
-      "random": "atsitiktinai 1/{n}"
+      "random": "atsitiktinai 1/{n}",
+      "image": "paveikslėlis"
     },
     "panel": {
       "status": "Būsena",

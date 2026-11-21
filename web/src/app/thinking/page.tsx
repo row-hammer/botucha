@@ -72,7 +72,7 @@ function TraceList() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {["all", "reply", "learn"].map((k) => (
+            {["all", "reply", "learn", "describe"].map((k) => (
               <SelectItem key={k} value={k}>
                 {t(`thinking.kind.${k}`)}
               </SelectItem>

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import io
 import asyncio
 import logging
 import os
@@ -13,7 +14,7 @@ from aiogram.types import Message, MessageReactionUpdated, ReactionTypeEmoji, Re
 
 from .app import Botucha, Incoming
 from .config import load_config
-from .images import MAX_SIDE
+from .images import MAX_IMAGE_BYTES, MAX_SIDE
 from .embed import OllamaEmbedder
 from .llm import OllamaLLM
 from .memory import Memory
@@ -86,6 +87,15 @@ class AiogramOutbox:
     async def leave(self, chat_id: int) -> None:
         await self.bot.leave_chat(chat_id)
 
+    async def fetch_image(self, file_id: str) -> bytes:
+        """Download a photo into memory (never to disk)."""
+        f = await self.bot.get_file(file_id)
+        if f.file_size and f.file_size > MAX_IMAGE_BYTES:
+            raise ValueError(f"image too large ({f.file_size} bytes)")
+        buf = io.BytesIO()
+        await self.bot.download_file(f.file_path, destination=buf)
+        return buf.getvalue()
+
     async def typing(self, chat_id: int) -> None:
         try:
             await self.bot.send_chat_action(chat_id, "typing")
@@ -101,7 +111,10 @@ async def main(config_path: Path) -> None:
     tg = Bot(cfg.telegram.token)
     me = await tg.get_me()
     log.info("logged in as @%s (%d)", me.username, me.id)
-    app = Botucha(cfg, store, memory, OllamaLLM(cfg.model), AiogramOutbox(tg), rng=random.Random(),
+    llm = OllamaLLM(cfg.model)
+    vision = await llm.has_vision()
+    log.info("model %s, vision: %s", cfg.model.chat_model, "yes" if vision else "no (photos are kept as text only)")
+    app = Botucha(cfg, store, memory, llm, AiogramOutbox(tg), rng=random.Random(), vision=vision,
                   bot_user_id=me.id, bot_username=me.username or "", prices=PriceClient(), tracer=Tracer(store))
     app.speller = Speller(Path(__file__).resolve().parent.parent / "data" / "hunspell" / "lt", vocab=app.vocabulary)
     dp = Dispatcher()

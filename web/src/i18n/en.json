@@ -89,7 +89,8 @@
     "leak": "persona leak",
     "repeat": "repeat",
     "foreign": "foreign script",
-    "spelling": "spelling"
+    "spelling": "spelling",
+    "description": "description"
   },
   "thinking": {
     "cols": {
@@ -104,7 +105,8 @@
     "kind": {
       "all": "All runs",
       "reply": "Replies",
-      "learn": "Learning"
+      "learn": "Learning",
+      "describe": "Image descriptions"
     },
     "outcome": {
       "all": "All outcomes",
@@ -128,7 +130,8 @@
       "reaction": "reaction",
       "idle": "idle learning",
       "keyword": "keyword “{k}”",
-      "random": "random 1/{n}"
+      "random": "random 1/{n}",
+      "image": "image"
     },
     "panel": {
       "status": "Status",

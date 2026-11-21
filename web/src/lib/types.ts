@@ -12,7 +12,7 @@ export interface Status {
 
 export interface TraceSummary {
   id: number;
-  kind: "reply" | "learn";
+  kind: "reply" | "learn" | "describe";
   chat_id: number | null;
   msg_id: number | null;
   user_name: string | null;

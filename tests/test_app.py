@@ -24,6 +24,8 @@ class FakeOutbox:
         self.typing_calls = 0
         self.left: list[int] = []
         self._next = 5000
+        self.images: dict[str, bytes] = {}
+        self.fetched: list[str] = []
 
     async def send(self, chat_id, texts, reply_to):
         ids = []
@@ -41,6 +43,12 @@ class FakeOutbox:
 
     async def leave(self, chat_id):
         self.left.append(chat_id)
+
+    async def fetch_image(self, file_id):
+        self.fetched.append(file_id)
+        if file_id not in self.images:
+            raise RuntimeError(f"no such file {file_id}")
+        return self.images[file_id]
 
 
 async def nosleep(_):

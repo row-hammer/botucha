@@ -137,3 +137,80 @@ async def test_has_vision():
     for caps, want in ((["completion", "vision"], True), (["completion"], False), (None, False)):
         llm.client = Client(caps)
         assert await llm.has_vision() is want
+
+
+C = -1001234567890
+
+
+async def vbot(app, responses, tracer=False):
+    bot, store, llm, out = await app(list(responses))
+    bot.vision = True
+    out.images = {"F1": b"ONE", "F2": b"TWO"}
+    if tracer:
+        from botucha.trace import Tracer
+        bot.tracer = Tracer(store, clock=lambda: 10_000.0)
+    return bot, store, llm, out
+
+
+async def test_reply_looks_at_image_and_describes_it(app):
+    bot, store, llm, out = await vbot(app, ["gražus katinas", "Katinas su akiniais."])
+    await bot.on_message(inc("botucha žiūrėk", image_file_id="F1"))
+    await settle()
+    assert [t for _, t, _ in out.sent] == ["gražus katinas"]
+    assert llm.calls[0]["images"] == [b"ONE"] and llm.calls[1]["images"] == [b"ONE"]
+    assert store.get_message(C, 1).text == "[nuotrauka: Katinas su akiniais.] botucha žiūrėk"
+
+
+async def test_reply_to_older_image_uses_it(app):
+    bot, store, llm, out = await vbot(app, ["matau", "x"])
+    await bot.on_message(inc("", msg_id=5, image_file_id="F2"))
+    await bot.on_message(inc("botucha kas čia?", msg_id=6, reply_to=5))
+    await settle()
+    assert llm.calls[0]["images"] == [b"TWO"]
+
+
+async def test_only_newest_image_in_burst(app):
+    bot, store, llm, out = await vbot(app, ["du", "x"])
+    await bot.on_message(inc("pirmas", msg_id=1, image_file_id="F1", mentions_bot=True))
+    await bot.on_message(inc("botucha antras", msg_id=2, image_file_id="F2"))
+    await settle()
+    assert llm.calls[0]["images"] == [b"TWO"]
+
+
+async def test_download_failure_replies_without_image(app):
+    bot, store, llm, out = await vbot(app, ["vis tiek atsakau"])
+    await bot.on_message(inc("botucha?", image_file_id="MISSING"))
+    await settle()
+    assert [t for _, t, _ in out.sent] == ["vis tiek atsakau"] and llm.calls[0]["images"] is None
+    assert store.get_message(C, 1).text == "[nuotrauka] botucha?"  # nothing to describe
+
+
+async def test_no_vision_never_fetches(app):
+    bot, store, llm, out = await vbot(app, ["ok"])
+    bot.vision = False
+    await bot.on_message(inc("botucha?", image_file_id="F1"))
+    await settle()
+    assert out.fetched == [] and llm.calls[0]["images"] is None
+
+
+async def test_foreign_chat_image_never_fetched(app):
+    bot, store, llm, out = await vbot(app, ["ok"])
+    await bot.on_message(inc("botucha?", chat=-5, image_file_id="F1"))
+    await settle()
+    assert out.fetched == [] and llm.calls == []
+
+
+async def test_describe_failure_keeps_text(app):
+    bot, store, llm, out = await vbot(app, ["gražu", RuntimeError("down")])
+    await bot.on_message(inc("botucha žiūrėk", image_file_id="F1"))
+    await settle()
+    assert [t for _, t, _ in out.sent] == ["gražu"]
+    assert store.get_message(C, 1).text == "[nuotrauka] botucha žiūrėk"
+
+
+async def test_describe_trace(app):
+    bot, store, llm, out = await vbot(app, ["gražu", "Katinas."], tracer=True)
+    await bot.on_message(inc("botucha žiūrėk", image_file_id="F1"))
+    await settle()
+    kinds = store.conn.execute("SELECT kind, outcome FROM traces ORDER BY id").fetchall()
+    assert kinds == [("reply", "sent"), ("describe", "sent")]

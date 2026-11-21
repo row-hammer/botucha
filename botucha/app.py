@@ -15,7 +15,9 @@ from pathlib import Path
 from typing import Protocol
 
 from .backup import daily_backup
-from .images import image_text
+from .images import (DESCRIBE_NUM_PREDICT, DESCRIBE_PROMPT, FETCH_TIMEOUT_S, MAX_IMAGE_BYTES,
+                     caption_of, clean_description, described_text, image_text)
+from .llm import chat_ex
 from .brain import PromptContext, generate_reply_ex
 from .commands import CommandContext, handle_command, load_trigger_state, message_link, parse_command
 from .config import Config
@@ -69,6 +71,7 @@ class Outbox(Protocol):
     async def react(self, chat_id: int, msg_id: int, emoji: str) -> None: ...
     async def typing(self, chat_id: int) -> None: ...
     async def leave(self, chat_id: int) -> None: ...
+    async def fetch_image(self, file_id: str) -> bytes: ...
 
 
 def _read(path) -> str:
@@ -84,7 +87,7 @@ class Botucha:
                  rng: random.Random, clock: Callable[[], float] = time.time, bot_user_id: int,
                  bot_username: str, sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
                  started_at: float | None = None, prices: PriceClient | None = None,
-                 tracer: Tracer | None = None):
+                 tracer: Tracer | None = None, vision: bool = False):
         self.cfg, self.store, self.memory, self.llm, self.outbox = cfg, store, memory, llm, outbox
         self.rng, self.clock, self.sleep = rng, clock, sleep
         self.bot_user_id, self.bot_username = bot_user_id, bot_username
@@ -92,6 +95,7 @@ class Botucha:
         self.state = load_trigger_state(store, cfg.trigger)
         self.state.quiet_until = float(store.get_state("quiet_until", "0") or 0)
         self.tracer = tracer
+        self.vision = vision  # the chat model can see images (checked at startup)
         self._last_error: str | None = None
         store.set_state("bot_started_at", str(self.started_at))
         self._ignored_chats: set[int] = set()
@@ -349,6 +353,8 @@ class Botucha:
                 convo = [m for m in recent if not m.text.startswith("/") or m.msg_id in ids]
                 history = self._trim_own(convo)
                 st.detail.update(history=len(history), own_dropped=len(convo) - len(history))
+                image_msg = self._pick_image(chat_id, jobs)
+                image = await self._fetch_image(image_msg, st.detail) if image_msg else None
             query = "\n".join(m.text for m in history if m.msg_id in ids) or (history[-1].text if history else "")
             with run.step("retrieval") as st:
                 hits = await self.memory.search_chunks(query, k=6 if recall else 3, chat_id=chat_id)
@@ -369,7 +375,7 @@ class Botucha:
                 profiles={members[u].name: p for u, p in self.memory.profiles().items() if u in members},
                 slang=self.memory.all_slang(), people=self.memory.people_lines(),
                 chunks=[h.chunk.text for h in hits], facts=[f.text for f in facts], history=history,
-                bot_user_id=self.bot_user_id, serious=any(j.serious for j in jobs), prices=prices)
+                bot_user_id=self.bot_user_id, serious=any(j.serious for j in jobs), prices=prices, image=image)
             await self.outbox.typing(chat_id)
             result = await generate_reply_ex(self.llm, ctx, num_predict=self.cfg.model.num_predict,
                                              max_chars=self.cfg.model.num_ctx * 3,
@@ -402,6 +408,63 @@ class Botucha:
             return
         run.finish("fallback" if result.fallback else "sent", reply="\n".join(texts),
                    sent=[(chat_id, mid) for mid in sent])
+        if image is not None and image_msg is not None:
+            await self._describe(chat_id, image_msg, image)
+
+    # ---- images ----------------------------------------------------------
+    def _pick_image(self, chat_id: int, jobs: list[Job]) -> StoredMessage | None:
+        """At most one image per reply: the one the answered message replies to, else the newest in the burst."""
+        if not self.vision:
+            return None
+        last = self.store.get_message(chat_id, jobs[-1].msg_id)
+        if last and last.reply_to:
+            parent = self.store.get_message(chat_id, last.reply_to)
+            if parent and parent.image_file_id:
+                return parent
+        for job in reversed(jobs):
+            m = self.store.get_message(chat_id, job.msg_id)
+            if m and m.image_file_id:
+                return m
+        return None
+
+    async def _fetch_image(self, msg: StoredMessage, detail: dict) -> bytes | None:
+        """Download into memory only; on any problem the reply goes on without the image."""
+        try:
+            data = await asyncio.wait_for(self.outbox.fetch_image(msg.image_file_id), FETCH_TIMEOUT_S)
+            if len(data) > MAX_IMAGE_BYTES:
+                raise ValueError(f"image too large ({len(data)} bytes)")
+        except Exception as e:
+            log.warning("image download failed: %s", e)
+            detail["image"] = {"msg_id": msg.msg_id, "error": f"{type(e).__name__}: {e}"}
+            return None
+        detail["image"] = {"msg_id": msg.msg_id, "bytes": len(data)}
+        return data
+
+    async def _describe(self, chat_id: int, msg: StoredMessage, image: bytes) -> None:
+        """After the reply: a short description replaces the bare [nuotrauka] tag, so the image becomes memory."""
+        run = self.tracer.start("describe", chat_id=chat_id, msg_id=msg.msg_id, user_name=msg.name,
+                                trigger="image") if self.tracer else NULL_RUN
+        try:
+            with run.step("generation", "attempt 1") as st:
+                res = await chat_ex(self.llm, [{"role": "user", "content": DESCRIBE_PROMPT}],
+                                    num_predict=DESCRIBE_NUM_PREDICT, images=[image])
+                st.detail.update(res.stats)
+                st.detail["raw"] = res.text
+            desc = clean_description(res.text)
+            run.add_step("filter", name="attempt 1", status="ok" if desc else "rejected",
+                         detail={"checks": [{"name": "description", "ok": bool(desc),
+                                             "reason": "" if desc else "empty, command, instruction or foreign script"}]})
+        except Exception as e:
+            log.warning("image description failed: %s", e)
+            run.finish("error", error=f"{type(e).__name__}: {e}")
+            return
+        if not desc:
+            run.finish("skipped", error="description rejected")
+            return
+        current = self.store.get_message(chat_id, msg.msg_id)
+        text = described_text(desc, caption_of(current.text if current else msg.text))
+        self.store.update_message_text(chat_id, msg.msg_id, text)
+        run.finish("sent", reply=text)
 
     async def _send(self, chat_id: int, texts: list[str], reply_to: int | None, *, store: bool) -> list[int]:
         out: list[int] = []
