@@ -26,6 +26,16 @@ def looks_like_instruction(text: str) -> bool:
     return _INSTRUCTION.search(fold(text)) is not None
 
 
+DEFAULT_BOT_NAME_REGEX = r"botuch\w*"
+
+
+def mentions_bot(text: str, name_regex: str = DEFAULT_BOT_NAME_REGEX) -> bool:
+    """True when the text names the bot in any word form. Memory is about the group; a stored line about the bot
+    himself ("Botucha answers everything in English") reads as a rule once it is in his prompt, and the
+    instruction filter cannot tell that from a description."""
+    return re.search(name_regex, fold(text)) is not None
+
+
 _QUOTED = re.compile(r"„[^“”]*[“”]|\"[^\"]*\"")
 
 

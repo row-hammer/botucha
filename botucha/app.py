@@ -28,7 +28,7 @@ from .export_import import import_export, parse_export
 from .feedback import score_for_reactions
 from .proofread import known_words, spelling_notes
 from .prices import DEFAULT_ALIASES, PriceClient, detect_symbols, format_quote
-from .learn import LEARN_MAX_CALLS, learn_once, profiles_due, refresh_profiles, should_learn, unlearned
+from .learn import LEARN_MAX_CALLS, clean_profile, learn_once, profiles_due, refresh_profiles, should_learn, unlearned
 from .llm import LLM
 from .memory import EMBED_BATCH, Memory
 from .store import Store, StoredMessage
@@ -115,6 +115,7 @@ class Botucha:
         store.set_state("bot_started_at", str(self.started_at))
         self._ignored_chats: set[int] = set()
         self._locked = frozenset(cfg.memory.locked_members)
+        self._bot_re = cfg.telegram.bot_name_regex
         self.prices = prices if cfg.prices.enabled else None
         self.speller = None  # set by __main__: Speller(dict, vocab=self.vocabulary)
         self.proofreader = None  # set by __main__ when [claude] is configured: ClaudeProofreader
@@ -362,7 +363,8 @@ class Botucha:
         members = self.store.members()
         return PromptContext(
             persona=_read(self.cfg.paths.persona), style_examples=_read(self.cfg.paths.style_examples),
-            profiles={members[u].name: p for u, p in self.memory.profiles().items() if u in members},
+            profiles={members[u].name: c for u, p in self.memory.profiles().items()
+                      if u in members and (c := clean_profile(p, self._bot_re))},
             slang=self.memory.all_slang(), spelling_notes=spelling_notes(self.store), serious=serious,
             **{"chunks": [], "facts": [], "history": [], "bot_user_id": self.bot_user_id, **rest})
 
@@ -699,6 +701,7 @@ class Botucha:
             try:
                 # a bounded piece of the backlog, and none of it while someone waits for a reply
                 n = await learn_once(self.memory, self.llm, chat_id, locked=self._locked, run=run,
+                                     bot_name_regex=self._bot_re,
                                      max_calls=LEARN_MAX_CALLS, should_stop=lambda: self.worker.pending)
             except Exception as e:
                 run.finish("error", error=f"{type(e).__name__}: {e}")
@@ -708,7 +711,8 @@ class Botucha:
                 continue  # more to read: the next tick goes on from the cursor
             self.store.set_state(key, str(self.store.last_rowid(chat_id)))
             if profiles_due(self.store, chat_id):
-                await refresh_profiles(self.memory, self.llm, self.store, chat_id, locked=self._locked)
+                await refresh_profiles(self.memory, self.llm, self.store, chat_id, locked=self._locked,
+                                       bot_name_regex=self._bot_re)
 
     async def learn_loop(self, every_s: float = 60.0) -> None:
         while True:
@@ -733,8 +737,9 @@ class Botucha:
         stalled = 0  # a chunk the model cannot read is tried twice and then skipped, so this always ends
         while unlearned(self.memory, chat_id) and stalled < 2:
             before = self.store.get_state(f"learn_cursor:{chat_id}", "0")
-            await learn_once(self.memory, self.llm, chat_id, locked=self._locked)
+            await learn_once(self.memory, self.llm, chat_id, locked=self._locked, bot_name_regex=self._bot_re)
             stalled = stalled + 1 if self.store.get_state(f"learn_cursor:{chat_id}", "0") == before else 0
-        await refresh_profiles(self.memory, self.llm, self.store, chat_id, locked=self._locked)
+        await refresh_profiles(self.memory, self.llm, self.store, chat_id, locked=self._locked,
+                                       bot_name_regex=self._bot_re)
         self.store.set_state(f"learned_rowid:{chat_id}", str(self.store.last_rowid(chat_id)))
         self.store.set_state("export_imported", "1")

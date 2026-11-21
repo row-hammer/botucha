@@ -6,7 +6,7 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from ..guard import MAX_FACT_CHARS, MAX_SLANG_CHARS, looks_like_instruction
+from ..guard import MAX_FACT_CHARS, MAX_SLANG_CHARS, looks_like_instruction, mentions_bot
 
 router = APIRouter()
 MAX_REL_CHARS = 60
@@ -42,7 +42,7 @@ def _mem(request: Request):
     return request.app.state.deps.memory
 
 
-def _clean(kind: str, text: str) -> str:
+def _clean(kind: str, text: str, bot_name_regex: str) -> str:
     text = " ".join(text.split())
     if not text:
         raise HTTPException(422, "text is empty")
@@ -56,6 +56,8 @@ def _clean(kind: str, text: str) -> str:
         raise HTTPException(422, f"too long, max {limit} characters")
     if looks_like_instruction(text):
         raise HTTPException(422, "looks like an instruction to the bot, not a fact")
+    if mentions_bot(text, bot_name_regex):
+        raise HTTPException(422, "memory is about the group: a line about the bot himself would read as a rule")
     return text
 
 
@@ -94,7 +96,8 @@ async def facts(request: Request, kind: Literal["fact", "slang"] | None = None, 
 @router.post("/api/facts")
 async def add_fact(request: Request, body: FactIn) -> dict:
     mem = _mem(request)
-    fid = await _embedded(mem.add_fact(body.kind, _clean(body.kind, body.text), body.about, "web"))
+    fid = await _embedded(mem.add_fact(body.kind, _clean(body.kind, body.text, request.app.state.deps.cfg.telegram.bot_name_regex),
+                                       body.about, "web"))
     return _fact_json(mem, next(f for f in mem.all_facts() if f.id == fid))
 
 
@@ -104,7 +107,7 @@ async def edit_fact(request: Request, fact_id: int, body: FactEdit) -> dict:
     cur = next((f for f in mem.all_facts() if f.id == fact_id), None)
     if cur is None:
         raise HTTPException(404, "no such fact")
-    await _embedded(mem.update_fact(fact_id, _clean(cur.kind, body.text)))
+    await _embedded(mem.update_fact(fact_id, _clean(cur.kind, body.text, request.app.state.deps.cfg.telegram.bot_name_regex)))
     return _fact_json(mem, next(f for f in mem.all_facts() if f.id == fact_id))
 
 

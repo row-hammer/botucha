@@ -305,7 +305,10 @@ answers, just without memory (the trace shows the failed search).
 
 When the chat has been quiet for 10 minutes and at least 30 new messages exist, the model reads the new
 chunks and returns JSON with facts (about named people) and slang. Rules:
-- his own lines are removed before learning, so his jokes never become "facts";
+- his own lines and command lines are removed before learning, so his jokes never become "facts" and a fact
+  deleted with `/pamirsk` does not come back from the `/isimink` that created it;
+- facts and slang about the bot himself are refused (here, from `/isimink` and from the dashboard): once in his
+  prompt, "Botucha always answers in English" reads as a rule;
 - a near-duplicate fact (cosine ≥ 0.88) updates the existing one instead of adding a new one, unless a person
   wrote the existing one (`/isimink`, `/slengas`, the dashboard): those are never changed by learning;
 - facts that look like instructions or are too long are dropped;
@@ -314,7 +317,9 @@ chunks and returns JSON with facts (about named people) and slang. Rules:
   every name and word form, and also for a fact about someone else that mentions them;
 - a private chat with him is never learned from: no facts, slang, profile lines or spell-check vocabulary come
   from it (`/isimink` and `/slengas` typed there still work, because that is teaching him on purpose);
-- profiles are regenerated every ~200 messages.
+- profiles are regenerated every ~200 messages, with the member lines marked as data; lines that look like
+  instructions or are about the bot are dropped, and a profile is cut to 800 characters (stored profiles are
+  filtered the same way on their way into the prompt).
 
 A backlog (a first import, a busy day) is read in pieces of about 6,000 characters, at most five model calls per
 idle run, and learning stops between pieces as soon as someone is waiting for a reply; the next run goes on
