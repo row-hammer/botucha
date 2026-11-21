@@ -259,5 +259,74 @@
       "name": "Name is empty",
       "rel": "1–60 characters"
     }
+  },
+  "ratings": {
+    "cols": {
+      "date": "Date",
+      "who": "Who",
+      "kind": "Rating",
+      "note": "Reason / correction",
+      "original": "His message",
+      "trace": "Trace",
+      "reviewed": "Reviewed"
+    },
+    "onlyOpen": "Only not reviewed",
+    "export": "Export JSONL",
+    "openTrace": "open",
+    "noTrace": "–",
+    "empty": "No ratings yet. Members rate replies with /gerai, /blogai, /pataisyk or reactions.",
+    "kind": {
+      "good": "good",
+      "bad": "bad",
+      "correction": "correction"
+    }
+  },
+  "controls": {
+    "replying": "Replying",
+    "replyingHint": "When off, he still listens and remembers, but never writes.",
+    "frequency": "Uninvited replies",
+    "frequencyHint": "About 1 in N messages (2 or more).",
+    "quiet": "Quiet mode",
+    "quietHint": "No uninvited replies or reactions for a while. Direct questions are still answered.",
+    "quietFor": "{n} min",
+    "quietCustom": "Custom (min)",
+    "quietOff": "Stop quiet mode",
+    "service": "Bot service",
+    "start": "Start",
+    "stop": "Stop",
+    "restart": "Restart",
+    "stopConfirm": "Stop the bot? He goes offline in the group until you start him again.",
+    "restartConfirm": "Restart the bot? He is offline for about 10 seconds.",
+    "journal": "Recent log",
+    "applied": "Applied, the bot picks it up within 5 seconds.",
+    "done": "Done"
+  },
+  "settings": {
+    "persona": "Persona",
+    "personaHint": "Applies to the next reply. A backup is saved before every change.",
+    "review": "Review changes",
+    "diff": "Changes",
+    "noChanges": "No changes.",
+    "chars": "{n} / {max} characters",
+    "config": "Settings",
+    "configHint": "Saved to config.toml (with a backup). Needs a restart to apply.",
+    "restartNow": "Restart now",
+    "fields": {
+      "model_temperature": "Temperature",
+      "model_num_predict": "Max reply tokens",
+      "trigger_keywords": "Keywords",
+      "trigger_keyword_prob": "Keyword reply chance",
+      "trigger_random_n": "Random reply 1 in N",
+      "trigger_cooldown_s": "Cooldown between uninvited replies (s)",
+      "trigger_reaction_n": "Random reaction 1 in N",
+      "trigger_tyla_default_min": "Default /tyla minutes",
+      "trigger_user_calls_per_min": "Max direct calls per person per minute",
+      "trigger_burst_quiet_s": "Wait after the last message (s)",
+      "trigger_burst_max_s": "Max wait for a burst (s)"
+    },
+    "hints": {
+      "model_temperature": "Lower = fewer invented words, higher = wilder humor (0–2).",
+      "trigger_keywords": "Comma separated word beginnings, e.g. spx, btc, akcij"
+    }
   }
 }

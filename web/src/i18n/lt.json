@@ -259,5 +259,74 @@
       "name": "Vardas tuščias",
       "rel": "1–60 simbolių"
     }
+  },
+  "ratings": {
+    "cols": {
+      "date": "Data",
+      "who": "Kas",
+      "kind": "Įvertinimas",
+      "note": "Priežastis / pataisymas",
+      "original": "Jo žinutė",
+      "trace": "Pėdsakas",
+      "reviewed": "Peržiūrėta"
+    },
+    "onlyOpen": "Tik neperžiūrėti",
+    "export": "Eksportuoti JSONL",
+    "openTrace": "atidaryti",
+    "noTrace": "–",
+    "empty": "Įvertinimų dar nėra. Nariai vertina su /gerai, /blogai, /pataisyk arba reakcijomis.",
+    "kind": {
+      "good": "gerai",
+      "bad": "blogai",
+      "correction": "pataisymas"
+    }
+  },
+  "controls": {
+    "replying": "Atsakinėja",
+    "replyingHint": "Išjungtas vis tiek klauso ir įsimena, bet nerašo.",
+    "frequency": "Savo iniciatyva",
+    "frequencyHint": "Maždaug 1 iš N žinučių (2 ar daugiau).",
+    "quiet": "Tylos režimas",
+    "quietHint": "Kurį laiką jokių savo iniciatyva atsakymų ar reakcijų. Į tiesioginius klausimus vis tiek atsako.",
+    "quietFor": "{n} min",
+    "quietCustom": "Kitas (min)",
+    "quietOff": "Baigti tylą",
+    "service": "Boto servisas",
+    "start": "Paleisti",
+    "stop": "Sustabdyti",
+    "restart": "Perkrauti",
+    "stopConfirm": "Sustabdyti botą? Grupėje jis bus neprisijungęs, kol vėl paleisi.",
+    "restartConfirm": "Perkrauti botą? Maždaug 10 sekundžių jo nebus.",
+    "journal": "Paskutiniai įrašai",
+    "applied": "Pritaikyta, botas tai pasiims per 5 sekundes.",
+    "done": "Atlikta"
+  },
+  "settings": {
+    "persona": "Persona",
+    "personaHint": "Galioja nuo kito atsakymo. Prieš kiekvieną pakeitimą išsaugoma atsarginė kopija.",
+    "review": "Peržiūrėti pakeitimus",
+    "diff": "Pakeitimai",
+    "noChanges": "Pakeitimų nėra.",
+    "chars": "{n} / {max} simbolių",
+    "config": "Nustatymai",
+    "configHint": "Išsaugoma į config.toml (su atsargine kopija). Kad įsigaliotų, reikia perkrauti.",
+    "restartNow": "Perkrauti dabar",
+    "fields": {
+      "model_temperature": "Temperatūra",
+      "model_num_predict": "Daugiausiai atsakymo tokenų",
+      "trigger_keywords": "Raktažodžiai",
+      "trigger_keyword_prob": "Tikimybė atsakyti į raktažodį",
+      "trigger_random_n": "Atsitiktinis atsakymas 1 iš N",
+      "trigger_cooldown_s": "Pertrauka tarp savo iniciatyva atsakymų (s)",
+      "trigger_reaction_n": "Atsitiktinė reakcija 1 iš N",
+      "trigger_tyla_default_min": "Numatytos /tyla minutės",
+      "trigger_user_calls_per_min": "Daugiausiai kreipimųsi per minutę vienam žmogui",
+      "trigger_burst_quiet_s": "Laukti po paskutinės žinutės (s)",
+      "trigger_burst_max_s": "Ilgiausiai laukti žinučių serijos (s)"
+    },
+    "hints": {
+      "model_temperature": "Mažiau = mažiau išgalvotų žodžių, daugiau = laukinesnis humoras (0–2).",
+      "trigger_keywords": "Žodžių pradžios, atskirtos kableliais, pvz. spx, btc, akcij"
+    }
   }
 }

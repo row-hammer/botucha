@@ -2,6 +2,16 @@
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
+/* Radix exposes state as data-state="…" (and some parts as data-x="true|false"); the shadcn styles use data-x: */
+@custom-variant data-open (&:is([data-state="open"], [data-open]:not([data-open="false"])));
+@custom-variant data-closed (&:is([data-state="closed"], [data-closed]:not([data-closed="false"])));
+@custom-variant data-checked (&:is([data-state="checked"], [data-checked]:not([data-checked="false"])));
+@custom-variant data-unchecked (&:is([data-state="unchecked"], [data-unchecked]:not([data-unchecked="false"])));
+@custom-variant data-active (&:is([data-state="active"], [data-active]:not([data-active="false"])));
+@custom-variant data-disabled (&:is([data-disabled]:not([data-disabled="false"])));
+@custom-variant data-placeholder (&:is([data-placeholder]:not([data-placeholder="false"])));
+@custom-variant data-horizontal (&:is([data-orientation="horizontal"]));
+@custom-variant data-vertical (&:is([data-orientation="vertical"]));
 
 @theme inline {
   --color-background: var(--background);

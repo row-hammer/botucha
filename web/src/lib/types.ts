@@ -89,3 +89,18 @@ export interface PeopleGraph {
   relations: Relation[];
   comentions: { a: number; b: number; n: number }[];
 }
+
+export interface Rating {
+  kind: "feedback" | "correction";
+  chat_id: number;
+  msg_id: number;
+  user_id: number;
+  user_name: string | null;
+  score: number | null;
+  reason: string | null;
+  text: string | null;
+  ts: number;
+  reviewed: boolean;
+  original: string | null;
+  trace_id: number | null;
+}
