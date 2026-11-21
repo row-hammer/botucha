@@ -2,12 +2,12 @@
 from __future__ import annotations
 
 import re
-import unicodedata
 from dataclasses import dataclass
 from enum import Enum
 from typing import Protocol
 
 from .config import TriggerCfg
+from .text import fold  # noqa: F401  (re-exported: many modules import fold from here)
 
 RECALL_RE = re.compile(r"\b(atsimen\w*|pamen\w*|prisimen\w*|kai mes)\b", re.IGNORECASE)
 
@@ -30,14 +30,8 @@ class _Rng(Protocol):
     def random(self) -> float: ...
 
 
-def fold(text: str) -> str:
-    """Lowercase and strip diacritics (ą -> a, š -> s)."""
-    nfkd = unicodedata.normalize("NFKD", text.lower())
-    return "".join(c for c in nfkd if not unicodedata.combining(c))
-
-
 def is_direct(text: str, *, reply_to_bot: bool, mentions_bot: bool, name_regex: str) -> bool:
-    return reply_to_bot or mentions_bot or re.search(name_regex, fold(text)) is not None
+    return reply_to_bot or mentions_bot or re.search(name_regex, fold(text), re.IGNORECASE) is not None
 
 
 def is_recall(text: str) -> bool:

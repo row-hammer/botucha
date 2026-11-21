@@ -275,7 +275,8 @@ class Botucha:
             if not direct:
                 mark_unsolicited(self.state, now)
             self.worker.submit(ReplyJob(m.chat_id, m.msg_id, direct=direct,
-                                        serious=direct and "rimtai" in fold(m.text), recall=is_recall(m.text),
+                                        serious=direct and re.search(r"\brimtai\b", fold(m.text)) is not None,
+                                        recall=is_recall(m.text),
                                         trigger=reason))
         elif decision is Decision.REACT:
             mark_unsolicited(self.state, now)

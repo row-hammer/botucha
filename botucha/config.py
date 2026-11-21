@@ -7,6 +7,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
+from .text import fold, strip_marks
+
 
 class ConfigError(Exception):
     pass
@@ -116,11 +118,12 @@ def load_config(path: Path, env: Mapping[str, str]) -> Config:
         base = Path(path).parent
         export = p.get("export")
         return Config(
-            telegram=TelegramCfg(token, chat_ids, int(t["admin_id"]), str(t["bot_name_regex"])),
+            # matched against folded text: no diacritics here either, case ignored when matching
+            telegram=TelegramCfg(token, chat_ids, int(t["admin_id"]), strip_marks(str(t["bot_name_regex"]))),
             model=ModelCfg(str(m["chat_model"]), str(m["embed_model"]), int(m["num_ctx"]),
                            int(m["num_predict"]), str(m["keep_alive"]), str(m["ollama_host"]),
                            float(m.get("temperature", 0.7)), float(m.get("min_p", ModelCfg.min_p))),
-            trigger=TriggerCfg(tuple(str(k).lower() for k in tr["keywords"]), float(tr["keyword_prob"]),
+            trigger=TriggerCfg(tuple(fold(str(k)) for k in tr["keywords"]), float(tr["keyword_prob"]),
                                int(tr["random_n"]), int(tr["cooldown_s"]), int(tr["reaction_n"]),
                                tuple(tr["reactions"]), float(tr["burst_quiet_s"]),
                                float(tr["burst_max_s"]), int(tr["tyla_default_min"]),
@@ -129,7 +132,7 @@ def load_config(path: Path, env: Mapping[str, str]) -> Config:
                            Path(export) if export else None),
             memory=MemoryCfg(tuple(int(u) for u in raw.get("memory", {}).get("locked_members", []))),
             prices=PricesCfg(bool(raw.get("prices", {}).get("enabled", True)),
-                             tuple((str(k).lower(), str(v)) for k, v in raw.get("prices", {}).get("aliases", {}).items())),
+                             tuple((fold(str(k)), str(v)) for k, v in raw.get("prices", {}).get("aliases", {}).items())),
             claude=_claude(raw),
         )
     except KeyError as e:
