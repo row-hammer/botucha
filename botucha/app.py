@@ -209,6 +209,9 @@ class Botucha:
                 return  # sent while offline: stored, never executed or answered (spec §4)
             if parsed:
                 name, args = parsed
+                if m.user_id != self.cfg.telegram.admin_id and self._over_limit(m.user_id, now):
+                    await self._yawn_once(m)  # commands cost model calls, Yahoo lookups and writes too
+                    return
                 if name in ("rimtai", "atsimeni") and m.ts >= self.started_at and self.state.enabled:
                     self.worker.submit(ReplyJob(m.chat_id, m.msg_id, direct=True, serious=name == "rimtai",
                                                 recall=name == "atsimeni", links=name == "atsimeni",
@@ -246,12 +249,7 @@ class Botucha:
                                               msg_ts=m.ts, now=now, state=self.state, cfg=self.cfg.trigger,
                                               rng=self.rng)
         if decision is Decision.REPLY and direct and self._over_limit(m.user_id, now):
-            calls = self._calls[m.user_id]
-            if len(calls) == self.cfg.trigger.user_calls_per_min + 1:  # react once per flood
-                try:
-                    await self.outbox.react(m.chat_id, m.msg_id, "🥱")
-                except Exception as e:
-                    log.warning("reaction failed: %s", e)
+            await self._yawn_once(m)
             return
         if decision is Decision.REPLY:
             if not direct:
@@ -308,7 +306,16 @@ class Botucha:
         else:
             self.store.set_feedback(chat_id, msg_id, user_id, score, None, self.clock())
 
+    async def _yawn_once(self, m: Incoming) -> None:
+        """One 🥱 on the first call over the limit; the rest of the flood is ignored without a sound."""
+        if len(self._calls[m.user_id]) == self.cfg.trigger.user_calls_per_min + 1:
+            try:
+                await self.outbox.react(m.chat_id, m.msg_id, "🥱")
+            except Exception as e:
+                log.warning("reaction failed: %s", e)
+
     def _over_limit(self, user_id: int, now: float) -> bool:
+        """Direct calls and commands per person in the last minute, this one included."""
         calls = self._calls[user_id]
         while calls and now - calls[0] > 60:
             calls.popleft()

@@ -103,3 +103,50 @@ async def test_leaves_unknown_group_not_dm(app):
 def test_quoted_examples_in_persona_are_not_leaks():
     persona = "Jei kas ruosiasi kvailyste, ispeji: „as tai degenas, bet tu nedaryk sito su nuomos pinigais“. Visada 3x."
     assert not leaks_prompt("as tai degenas bet tu nedaryk sito su nuomos pinigais xdd", persona)
+
+
+async def test_commands_count_against_the_per_user_limit(app):
+    bot, store, llm, out = await app()
+    jobs = []
+    bot.worker.submit = jobs.append
+    for i in range(30):
+        await bot.on_message(inc("/rimtai ar verta pirkti", msg_id=100 + i))
+    limit = bot.cfg.trigger.user_calls_per_min
+    assert len(jobs) == limit
+    assert [r[2] for r in out.reactions] == ["🥱"]  # one yawn per flood, not thirty
+
+
+async def test_mentions_and_commands_share_one_budget(app):
+    bot, store, llm, out = await app()
+    fetched = []
+
+    class Prices:
+        async def quotes(self, symbols):
+            fetched.append(symbols)
+            return []
+    bot.prices = Prices()
+    jobs = []
+    bot.worker.submit = jobs.append
+    limit = bot.cfg.trigger.user_calls_per_min
+    for i in range(limit):
+        await bot.on_message(inc(f"botucha {i}", msg_id=100 + i))
+    await bot.on_message(inc("/kaina nvda", msg_id=200))
+    await bot.on_message(inc("/isimink Tadas turi daug coreweave", msg_id=201))
+    assert len(jobs) == limit and fetched == [] and store.conn.execute("SELECT COUNT(*) FROM facts").fetchone()[0] == 0
+
+
+async def test_the_admin_is_not_limited(app):
+    bot, store, llm, out = await app()
+    admin = bot.cfg.telegram.admin_id
+    for i in range(20):
+        await bot.on_message(inc(f"/isimink Tadas faktas numeris {i}", msg_id=100 + i, user=admin))
+    assert store.conn.execute("SELECT COUNT(*) FROM facts").fetchone()[0] == 20 and out.reactions == []
+
+
+async def test_commands_sent_while_offline_do_not_use_up_the_budget(app):
+    bot, store, llm, out = await app(["a"])
+    for i in range(20):
+        await bot.on_message(inc("/rimtai senas", msg_id=100 + i, ts=10.0))  # before start: stored only
+    await bot.on_message(inc("botucha labas", msg_id=300))
+    await settle()
+    assert out.sent and out.sent[-1][2] == 300

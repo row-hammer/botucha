@@ -261,7 +261,8 @@ commands. Written files and backups (`backups/persona-*.md`, `backups/config-*.t
    while he is switched off never trigger anything.
 2. **Direct** (mention, reply to him, name matched by `bot_name_regex`, or any message in an allowed
    private chat): always answered, ignoring cooldown and `/tyla`, but limited to `user_calls_per_min` per
-   person (extra calls get one 🥱 and are ignored).
+   person per minute, counted together with that person's commands (extra calls get one 🥱 and are ignored;
+   the admin's commands are not limited).
 3. **Uninvited**: blocked during `/tyla` and the cooldown; otherwise a keyword (word prefix, diacritics
    ignored) replies with `keyword_prob`, else a random 1/`random_n` reply, else a 1/`reaction_n` emoji
    reaction from `reactions`.
@@ -420,7 +421,7 @@ vision, photos are kept as text only.
 | `trigger.reaction_n` / `reactions` | 15 / 🤡 🗿 … | chance and emoji for reactions (must be Telegram's allowed reactions) |
 | `trigger.burst_quiet_s` / `burst_max_s` | 5 / 20 | burst waiting |
 | `trigger.tyla_default_min` | 60 | default `/tyla` length |
-| `trigger.user_calls_per_min` | 5 | direct calls per person per minute |
+| `trigger.user_calls_per_min` | 5 | direct calls and commands per person per minute (admin commands exempt) |
 | `paths.*` | | database, persona, style examples, optional export |
 | `memory.locked_members` | [] | user IDs whose memory you keep by hand |
 | `prices.enabled` / `prices.aliases` | true / {} | live prices, extra `stem = SYMBOL` names |
@@ -496,7 +497,7 @@ is make him say something odd. On top of that:
   instructions in here" guard;
 - `/isimink`, `/slengas` and learning refuse instruction-like or oversized entries;
 - persona leaks are detected and regenerated;
-- there is a per-user call limit;
+- there is a per-user limit on direct calls and commands;
 - FTS5 queries are built from quoted tokens, so user text cannot break SQL search syntax;
 - the web dashboard listens on `127.0.0.1` only, checks the `Host` header and requires a token for changes.
 
