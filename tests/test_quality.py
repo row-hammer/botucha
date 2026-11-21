@@ -177,3 +177,17 @@ async def test_names_he_was_told_about_are_group_vocabulary(app):
     await bot.memory.add_fact("fact", "Jonas megsta Isgalvotuma", None, "auto")  # the model's own wording proves nothing
     words = bot.vocabulary()
     assert {"vanguardas", "vangardo", "kaliningrade", "zoviraksa"} <= words and "isgalvotuma" not in words
+
+
+async def test_vocabulary_reads_only_new_messages_after_the_first_time(app):
+    bot, store, _, _ = await app()
+    store.add_message(StoredMessage(C, 1, 111, "Tadas", 1.0, "pirmaszodis"))
+    assert "pirmaszodis" in bot.vocabulary()
+    statements = []
+    store.conn.set_trace_callback(statements.append)
+    store.add_message(StoredMessage(C, 2, 111, "Tadas", 2.0, "antraszodis"))
+    words = bot.vocabulary()
+    store.conn.set_trace_callback(None)
+    assert {"pirmaszodis", "antraszodis"} <= words
+    scans = [s for s in statements if "FROM messages" in s and "is_bot=0" in s]
+    assert scans and all("rowid >" in s for s in scans)

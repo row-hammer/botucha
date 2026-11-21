@@ -127,6 +127,8 @@ class Botucha:
         self.warm_prompt_cache = False  # set by __main__: keep the stable prompt in the model's cache
         self._warmed: str | None = None  # the system message the model has cached, as far as we know
         self._used_model = False  # set by a learning tick that called the model
+        self._group_words: set[str] = set()  # words members wrote, read incrementally by vocabulary()
+        self._vocab_rowid = 0
         self.worker = ReplyWorker(self.run_job, quiet_s=cfg.trigger.burst_quiet_s,
                                   max_wait_s=cfg.trigger.burst_max_s)
 
@@ -360,12 +362,17 @@ class Botucha:
         return [r[0] for r in rows]
 
     def vocabulary(self) -> set[str]:
-        """Words the group itself uses (members only, never Botucha, never a private chat), plus slang and names."""
-        words: set[str] = set()
-        for (text,) in self.store.conn.execute(
-                "SELECT text FROM messages WHERE is_bot=0 AND user_id != ? AND chat_id < 0", (self.bot_user_id,)):
+        """Words the group itself uses (members only, never Botucha, never a private chat), plus slang and names.
+        Messages are read once: later calls only read what arrived since (a word dropped by an edit stays known,
+        which is harmless)."""
+        for rowid, text in self.store.conn.execute(
+                "SELECT rowid, text FROM messages WHERE rowid > ? AND is_bot=0 AND user_id != ? AND chat_id < 0",
+                (self._vocab_rowid, self.bot_user_id)):
             # caption only: a [nuotrauka: …] description is Botucha's wording, not the group's
-            words.update(w.lower() for w in re.findall(r"[^\W\d_]+", caption_of(text) if text.startswith("[nuotrauka") else text))
+            self._group_words.update(w.lower() for w in re.findall(
+                r"[^\W\d_]+", caption_of(text) if text.startswith("[nuotrauka") else text))
+            self._vocab_rowid = max(self._vocab_rowid, rowid)
+        words = set(self._group_words)
         for t in self.memory.all_slang():
             words.update(w.lower() for w in re.findall(r"[^\W\d_]+", t.split("=", 1)[0]))
         for mem in self.store.members().values():
