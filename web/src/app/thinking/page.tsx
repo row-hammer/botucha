@@ -1,15 +1,17 @@
 "use client";
 
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, X } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { PageHeader } from "@/components/page-header";
+import { useNodeLabel } from "@/components/pipeline-flow";
 import { StepPanel } from "@/components/step-panel";
 import { OutcomeBadge, useTriggerLabel } from "@/components/trace-bits";
 import { TraceGraph } from "@/components/trace-graph";
 import { TraceTable } from "@/components/trace-table";
 import { TraceWaterfall } from "@/components/trace-waterfall";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -23,20 +25,29 @@ const PAGE = 50;
 
 function TraceList() {
   const t = useT();
+  const nodeLabel = useNodeLabel();
+  const params = useSearchParams();
+  const path = params.get("path"); // drill-down from the Pipeline page
+  const range = params.get("range") ?? "30d";
   const [kind, setKind] = useState("all");
-  const [outcome, setOutcome] = useState("all");
+  const [outcome, setOutcome] = useState(params.get("outcome") ?? "all");
   const [rows, setRows] = useState<TraceSummary[] | null>(null);
   const [more, setMore] = useState(false);
 
   const query = useCallback(
     (before?: number) => {
       const p = new URLSearchParams({ limit: String(PAGE) });
-      if (kind !== "all") p.set("kind", kind);
-      if (outcome !== "all") p.set("outcome", outcome);
+      if (path) {
+        p.set("path", path);
+        p.set("range", range);
+      } else {
+        if (kind !== "all") p.set("kind", kind);
+        if (outcome !== "all") p.set("outcome", outcome);
+      }
       if (before) p.set("before_id", String(before));
       return api<TraceSummary[]>(`/api/traces?${p}`);
     },
-    [kind, outcome],
+    [kind, outcome, path, range],
   );
   useEffect(() => {
     query()
@@ -49,12 +60,13 @@ function TraceList() {
   useEffect(
     () =>
       onTrace((tr) => {
+        if (path) return; // the path of a new trace is not known here; reload to include it
         if ((kind === "all" || tr.kind === kind) && (outcome === "all" || tr.outcome === outcome))
           setRows((cur) =>
             cur ? (cur.some((r) => r.id === tr.id) ? cur.map((r) => (r.id === tr.id ? tr : r)) : [tr, ...cur]) : cur,
           );
       }),
-    [kind, outcome],
+    [kind, outcome, path],
   );
   const older = () => {
     if (!rows?.length) return;
@@ -67,7 +79,15 @@ function TraceList() {
   return (
     <>
       <PageHeader title={t("nav.thinking")}>
-        <Select value={kind} onValueChange={setKind}>
+        {path ? (
+          <Badge variant="outline" className="gap-1 py-1 pr-1 pl-2.5 text-sm">
+            {t("thinking.pathFilter", { node: nodeLabel(path), range: t(`overview.range.${range}`) })}
+            <Link href="/thinking/" aria-label={t("thinking.clearFilter")} className="rounded p-0.5 hover:bg-muted">
+              <X className="size-3.5" />
+            </Link>
+          </Badge>
+        ) : null}
+        <Select value={kind} onValueChange={setKind} disabled={!!path}>
           <SelectTrigger size="sm" className="w-36">
             <SelectValue />
           </SelectTrigger>
@@ -79,7 +99,7 @@ function TraceList() {
             ))}
           </SelectContent>
         </Select>
-        <Select value={outcome} onValueChange={setOutcome}>
+        <Select value={outcome} onValueChange={setOutcome} disabled={!!path}>
           <SelectTrigger size="sm" className="w-40">
             <SelectValue />
           </SelectTrigger>

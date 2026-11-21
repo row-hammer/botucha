@@ -1,6 +1,15 @@
 "use client";
 
-import { Activity, Brain, Gauge, MessageSquareHeart, Network, Settings2, SlidersHorizontal } from "lucide-react";
+import {
+  Activity,
+  Brain,
+  Gauge,
+  MessageSquareHeart,
+  Network,
+  Settings2,
+  SlidersHorizontal,
+  Workflow,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
@@ -22,6 +31,7 @@ import { useLive } from "@/lib/live";
 
 export const NAV = [
   { href: "/", key: "overview", icon: Gauge },
+  { href: "/pipeline/", key: "pipeline", icon: Workflow },
   { href: "/thinking/", key: "thinking", icon: Activity },
   { href: "/memory/", key: "memory", icon: Brain },
   { href: "/people/", key: "people", icon: Network },

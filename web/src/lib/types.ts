@@ -104,3 +104,29 @@ export interface Rating {
   original: string | null;
   trace_id: number | null;
 }
+
+export type StageKey = "context" | "retrieval" | "prompt" | "gen1" | "gen2" | "filter" | "send";
+
+export interface Pipeline {
+  rates: {
+    runs: number;
+    sent: number;
+    fallback: number;
+    silent: number;
+    first_try: number;
+    avg_attempts: number | null;
+  };
+  nodes: { id: string; n: number }[];
+  links: { source: string; target: string; value: number }[];
+  stages: ({ t: number; n: number } & Record<StageKey, number | null>)[];
+}
+
+export interface Progress {
+  id: number;
+  kind: TraceSummary["kind"];
+  user_name: string | null;
+  trigger: string;
+  started: number;
+  steps: number;
+  last: { kind: string; name: string | null; status: StepStatus };
+}

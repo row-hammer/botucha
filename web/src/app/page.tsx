@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Gauge, MessageSquare, ThumbsDown, ThumbsUp, Timer, Zap } from "lucide-react";
+import { AlertTriangle, CircleCheck, MessageSquare, ThumbsUp, Timer, TriangleAlert, Zap } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import {
   Bar,
@@ -24,7 +24,8 @@ import { api } from "@/lib/api";
 import { fmtMs, fmtNum, fmtTime } from "@/lib/format";
 import { useLocale, useT } from "@/lib/i18n";
 import { onTrace, useLive } from "@/lib/live";
-import type { Metrics } from "@/lib/types";
+import { pct } from "@/lib/pipeline";
+import type { Metrics, Pipeline } from "@/lib/types";
 
 type Range = "24h" | "7d" | "30d";
 const axis = { stroke: "var(--muted-foreground)", fontSize: 11, tickLine: false, axisLine: false };
@@ -39,11 +40,17 @@ export default function Overview() {
   const status = useLive((s) => s.status);
   const [range, setRange] = useState<Range>("24h");
   const [m, setM] = useState<Metrics | null>(null);
+  const [p, setP] = useState<Pipeline | null>(null);
+  const [error, setError] = useState(false);
 
   const load = useCallback(() => {
-    api<Metrics>(`/api/metrics?range=${range}`)
-      .then(setM)
-      .catch(() => {});
+    Promise.all([api<Metrics>(`/api/metrics?range=${range}`), api<Pipeline>(`/api/pipeline?range=${range}`)])
+      .then(([metrics, pipeline]) => {
+        setM(metrics);
+        setP(pipeline);
+        setError(false);
+      })
+      .catch(() => setError(true));
   }, [range]);
   useEffect(() => {
     load();
@@ -74,6 +81,11 @@ export default function Overview() {
         </Tabs>
       </PageHeader>
       <div className="flex flex-col gap-4 p-4">
+        {error ? (
+          <p role="alert" className="rounded-md border border-bad/40 bg-bad/10 px-3 py-2 text-bad text-sm">
+            {t("common.loadFailed")}
+          </p>
+        ) : null}
         <Card className="py-3">
           <CardContent className="flex flex-wrap items-center gap-x-6 gap-y-2 px-4 text-sm">
             <StatusBadge state={status?.bot} />
@@ -111,13 +123,28 @@ export default function Overview() {
             icon={Zap}
           />
           <StatCard
-            label={t("overview.cards.rejections")}
-            value={fmtNum(m?.cards.rejections)}
-            icon={Gauge}
-            tone="text-warn"
+            label={t("pipeline.cards.firstTry")}
+            value={pct(p?.rates.first_try ?? 0, p?.rates.runs ?? 0)}
+            sub={p ? `${p.rates.first_try}/${p.rates.runs}` : undefined}
+            icon={CircleCheck}
+            tone="text-ok"
+            href="/pipeline/"
           />
-          <StatCard label={t("overview.cards.good")} value={fmtNum(m?.cards.good)} icon={ThumbsUp} tone="text-ok" />
-          <StatCard label={t("overview.cards.bad")} value={fmtNum(m?.cards.bad)} icon={ThumbsDown} tone="text-bad" />
+          <StatCard
+            label={t("pipeline.cards.fallback")}
+            value={pct(p?.rates.fallback ?? 0, p?.rates.runs ?? 0)}
+            sub={p ? `${p.rates.fallback}/${p.rates.runs}` : undefined}
+            icon={TriangleAlert}
+            tone="text-warn"
+            href={`/thinking/?path=out:fallback&range=${range}`}
+          />
+          <StatCard
+            label={t("overview.cards.ratings")}
+            value={`${fmtNum(m?.cards.good)} / ${fmtNum(m?.cards.bad)}`}
+            sub={t("overview.cards.goodBad")}
+            icon={ThumbsUp}
+            href="/ratings/"
+          />
         </div>
 
         <div className="grid gap-4 lg:grid-cols-2">
@@ -139,8 +166,7 @@ export default function Overview() {
                   name={t("overview.charts.p50")}
                   stroke="var(--chart-1)"
                   strokeWidth={2}
-                  dot={false}
-                  connectNulls
+                  dot={{ r: 2 }}
                 />
                 <Line
                   type="monotone"
@@ -148,8 +174,7 @@ export default function Overview() {
                   name={t("overview.charts.p95")}
                   stroke="var(--chart-4)"
                   strokeWidth={2}
-                  dot={false}
-                  connectNulls
+                  dot={{ r: 2 }}
                   strokeDasharray="4 3"
                 />
               </LineChart>

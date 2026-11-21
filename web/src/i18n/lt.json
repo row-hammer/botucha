@@ -10,7 +10,8 @@
     "people": "Žmonės",
     "ratings": "Įvertinimai",
     "controls": "Valdymas",
-    "settings": "Persona ir nustatymai"
+    "settings": "Persona ir nustatymai",
+    "pipeline": "Eiga"
   },
   "common": {
     "language": "Kalba",
@@ -34,7 +35,8 @@
     "confirm": "Ar tikrai?",
     "saved": "Išsaugota",
     "deleted": "Ištrinta",
-    "loadOlder": "Rodyti senesnius"
+    "loadOlder": "Rodyti senesnius",
+    "loadFailed": "Nepavyko gauti duomenų iš boto. Ar veikia valdymo skydelio paslauga?"
   },
   "errors": {
     "busy": "Duomenų bazė užimta, pabandyk po akimirkos.",
@@ -67,7 +69,9 @@
       "toks": "Generavimo greitis",
       "rejections": "Filtrų atmetimai",
       "good": "Geri įvertinimai",
-      "bad": "Blogi įvertinimai"
+      "bad": "Blogi įvertinimai",
+      "ratings": "Įvertinimai",
+      "goodBad": "👍 / 👎"
     },
     "charts": {
       "latency": "Atsakymo laikas",
@@ -169,7 +173,9 @@
       "prompt_eval_ms": "prompto skaitymas",
       "load_ms": "modelio įkėlimas",
       "total_ms": "iš viso"
-    }
+    },
+    "pathFilter": "{node} · {range}",
+    "clearFilter": "Išvalyti filtrą"
   },
   "step": {
     "context": "Kontekstas",
@@ -332,6 +338,48 @@
       "model_temperature": "Mažiau = mažiau išgalvotų žodžių, daugiau = laukinesnis humoras (0–2).",
       "model_min_p": "Atmeta mažai tikėtinus žodžių gabalus: mažiau išgalvotų žodžių (0 = išjungta, įprastai 0.05–0.1).",
       "trigger_keywords": "Žodžių pradžios, atskirtos kableliais, pvz. spx, btc, akcij"
+    }
+  },
+  "pipeline": {
+    "replies": "atsakymų: {n}",
+    "cards": {
+      "runs": "Paleidimai",
+      "firstTry": "Praėjo iš pirmo karto",
+      "sent": "Išsiųsta be klaidų",
+      "fallback": "Išsiųstas atsarginis",
+      "silent": "Nutylėjo",
+      "attempts": "Bandymų atsakymui"
+    },
+    "flow": {
+      "title": "Kaip atsakymai eina per filtrą",
+      "hint": "Plotis = atsakymų skaičius. Paspauskite langelį ar juostą, kad pamatytumėte tuos atsakymus."
+    },
+    "stages": {
+      "title": "Kur dingsta laikas (vidurkis atsakymui)",
+      "share": "Atsakymo laiko dalis",
+      "shareHint": "Vidurkis išsiųstam atsakymui per visą laikotarpį."
+    },
+    "stage": {
+      "context": "Kontekstas",
+      "retrieval": "Atminties paieška",
+      "prompt": "Užklausa",
+      "gen1": "Generavimas 1",
+      "gen2": "Generavimas 2 (pakartotinis)",
+      "filter": "Filtrai",
+      "send": "Siuntimas"
+    },
+    "live": {
+      "title": "Dabar",
+      "idle": "Laukia kitos žinutės.",
+      "offline": "Neprisijungta prie tiesioginio srauto.",
+      "retry": "{n} bandymas"
+    },
+    "node": {
+      "unknown": "nežinomas trigeris",
+      "passed": "{n} bandymas praėjo",
+      "error": "{n} bandymas: modelio klaida",
+      "rejected": "{n} bandymas: {check}",
+      "rejectedAny": "{n} bandymas: atmestas"
     }
   }
 }

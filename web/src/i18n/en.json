@@ -10,7 +10,8 @@
     "people": "People",
     "ratings": "Ratings",
     "controls": "Controls",
-    "settings": "Persona & Settings"
+    "settings": "Persona & Settings",
+    "pipeline": "Pipeline"
   },
   "common": {
     "language": "Language",
@@ -34,7 +35,8 @@
     "confirm": "Are you sure?",
     "saved": "Saved",
     "deleted": "Deleted",
-    "loadOlder": "Load older"
+    "loadOlder": "Load older",
+    "loadFailed": "Couldn’t load data from the bot. Is the dashboard service running?"
   },
   "errors": {
     "busy": "The database is busy, try again in a moment.",
@@ -67,7 +69,9 @@
       "toks": "Generation speed",
       "rejections": "Filter rejections",
       "good": "Good ratings",
-      "bad": "Bad ratings"
+      "bad": "Bad ratings",
+      "ratings": "Ratings",
+      "goodBad": "👍 / 👎"
     },
     "charts": {
       "latency": "Reply time",
@@ -169,7 +173,9 @@
       "prompt_eval_ms": "prompt reading",
       "load_ms": "model load",
       "total_ms": "total"
-    }
+    },
+    "pathFilter": "{node} · {range}",
+    "clearFilter": "Clear filter"
   },
   "step": {
     "context": "Context",
@@ -332,6 +338,48 @@
       "model_temperature": "Lower = fewer invented words, higher = wilder humor (0–2).",
       "model_min_p": "Cuts unlikely tokens, so fewer invented words (0 = off, 0.05–0.1 typical).",
       "trigger_keywords": "Comma separated word beginnings, e.g. spx, btc, akcij"
+    }
+  },
+  "pipeline": {
+    "replies": "{n} replies",
+    "cards": {
+      "runs": "Runs",
+      "firstTry": "Passed first try",
+      "sent": "Sent clean",
+      "fallback": "Fallback sent",
+      "silent": "Stayed silent",
+      "attempts": "Attempts per reply"
+    },
+    "flow": {
+      "title": "How replies flow through the filter",
+      "hint": "Width = number of replies. Click a box or a band to see those replies."
+    },
+    "stages": {
+      "title": "Where the time goes (mean per reply)",
+      "share": "Share of reply time",
+      "shareHint": "Mean per sent reply over the whole range."
+    },
+    "stage": {
+      "context": "Context",
+      "retrieval": "Memory search",
+      "prompt": "Prompt",
+      "gen1": "Generation 1",
+      "gen2": "Generation 2 (retry)",
+      "filter": "Filters",
+      "send": "Send"
+    },
+    "live": {
+      "title": "Right now",
+      "idle": "Idle, waiting for the next message.",
+      "offline": "Not connected to the live stream.",
+      "retry": "retry {n}"
+    },
+    "node": {
+      "unknown": "unknown trigger",
+      "passed": "Attempt {n} passed",
+      "error": "Attempt {n}: model error",
+      "rejected": "Attempt {n}: {check}",
+      "rejectedAny": "Attempt {n}: rejected"
     }
   }
 }
