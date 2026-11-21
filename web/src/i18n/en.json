@@ -267,6 +267,8 @@
     "legendRelation": "relation",
     "legendComention": "mentioned together",
     "deleteRelation": "Delete relation",
+    "otherPerson": "Other person",
+    "addRelation": "Add relation",
     "saveAliases": "Save word forms",
     "errors": {
       "name": "Name is empty",

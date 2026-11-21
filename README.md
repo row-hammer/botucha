@@ -217,7 +217,7 @@ Retry button.
 | Quality | words the spell check flags (with Claude's verdict and an "add to known words" button), Claude proofreading status and switch, context window use, attempts, triggers, per-person table, when the group is active |
 | Thinking | every reply and learning run, live; open one to see its step graph and timeline (below) |
 | Memory | facts and slang: search, filter by person or source, add, edit, delete |
-| People | graph of people, laid out automatically: explicit relations (arrows with labels) and people mentioned together (dashed); drag from one person to another to add a relation, "Auto-arrange" to tidy up |
+| People | graph of people, laid out automatically: explicit relations (arrows with labels) and people mentioned together (dashed); drag from one person to another to add a relation (or add it in a person's panel), "Auto-arrange" to tidy up |
 | Ratings | 👍/👎 and corrections next to his original message and a link to its trace; mark as reviewed; export JSONL for fine-tuning |
 | Controls | on/off, uninvited reply frequency, quiet mode, start/stop/restart the bot, recent log |
 | Persona & Settings | edit `persona.md` with a diff before saving; edit selected `config.toml` values (backed up, comments kept) |

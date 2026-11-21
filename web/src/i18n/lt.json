@@ -267,6 +267,8 @@
     "legendRelation": "ryšys",
     "legendComention": "minimi kartu",
     "deleteRelation": "Ištrinti ryšį",
+    "otherPerson": "Kitas žmogus",
+    "addRelation": "Pridėti ryšį",
     "saveAliases": "Išsaugoti žodžių formas",
     "errors": {
       "name": "Vardas tuščias",

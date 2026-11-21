@@ -116,6 +116,33 @@ test.describe("desktop", () => {
     await expect(page.locator(".react-flow__edge-text").filter({ hasText: "draugas" })).toBeVisible();
   });
 
+  test("people: a relation can be added from the person panel, without dragging", async ({ page }) => {
+    await page.goto("/people/");
+    await settle(page);
+    await page.locator(".react-flow__node").filter({ hasText: "Rūta" }).click();
+    const panel = page.getByRole("dialog");
+    await panel.getByRole("combobox", { name: "Other person" }).click();
+    await page.getByRole("option", { name: "Jonas" }).click();
+    await panel.getByLabel("Relation", { exact: true }).fill("sesuo");
+    await panel.getByRole("button", { name: "Add relation" }).click();
+    await expect(panel.getByRole("listitem").filter({ hasText: "sesuo" })).toContainText("Rūta");
+    await page.keyboard.press("Escape");
+    await expect(page.locator(".react-flow__edge-text").filter({ hasText: "sesuo" })).toBeVisible();
+  });
+
+  test("the live stream comes back after the server refused it", async ({ page, problems }) => {
+    let refuse = true;
+    await page.route("**/api/live", (route) =>
+      refuse ? route.fulfill({ status: 503, body: "busy" }) : route.fallback(),
+    );
+    await page.goto("/pipeline/");
+    await settle(page);
+    await expect(page.getByText("Not connected to the live stream.")).toBeVisible();
+    refuse = false;
+    await expect(page.getByText("Idle, waiting for the next message.")).toBeVisible({ timeout: 15_000 });
+    problems.splice(0); // the browser logs the refused stream (503) on purpose
+  });
+
   test("ratings list the seeded rating and link its trace", async ({ page }) => {
     await page.goto("/ratings/");
     await settle(page);

@@ -7,6 +7,8 @@ import type { Progress, Status, TraceSummary } from "@/lib/types";
 type Listener = (t: TraceSummary) => void;
 const listeners = new Set<Listener>();
 let source: EventSource | null = null;
+let retryMs = 1_000;
+const MAX_RETRY_MS = 30_000;
 
 export const useLive = create<{ status: Status | null; connected: boolean; running: Record<number, Progress> }>(() => ({
   status: null,
@@ -14,12 +16,27 @@ export const useLive = create<{ status: Status | null; connected: boolean; runni
   running: {},
 }));
 
-/** One shared EventSource for the whole app; reconnects on its own (EventSource retries). */
+/** One shared EventSource for the whole app. The browser retries a dropped connection by itself, but gives up
+ * for good after an error response (e.g. 503 while the service restarts): then a new one is opened, with backoff.
+ * While disconnected the last status is dropped, so nothing shows the bot as running when that is unknown. */
 export function startLive(): void {
   if (source || typeof window === "undefined") return;
-  source = new EventSource("/api/live");
-  source.addEventListener("open", () => useLive.setState({ connected: true }));
-  source.addEventListener("error", () => useLive.setState({ connected: false, running: {} }));
+  const es = new EventSource("/api/live");
+  source = es;
+  es.addEventListener("open", () => {
+    retryMs = 1_000;
+    useLive.setState({ connected: true });
+  });
+  es.addEventListener("error", () => {
+    useLive.setState({ connected: false, running: {}, status: null });
+    if (es.readyState === EventSource.CLOSED) {
+      es.close();
+      if (source === es) source = null;
+      setTimeout(startLive, retryMs);
+      retryMs = Math.min(retryMs * 2, MAX_RETRY_MS);
+    }
+  });
+  source.addEventListener("status", (e) => useLive.setState({ status: JSON.parse((e as MessageEvent).data) }));
   source.addEventListener("status", (e) => useLive.setState({ status: JSON.parse((e as MessageEvent).data) }));
   source.addEventListener("progress", onProgress);
   source.addEventListener("trace", (e) => {

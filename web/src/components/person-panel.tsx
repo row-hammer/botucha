@@ -8,8 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { api, post } from "@/lib/api";
+import { ApiError, api, post } from "@/lib/api";
 import { useT } from "@/lib/i18n";
 import { useApi } from "@/lib/query";
 import type { Fact, PeopleGraph, Person } from "@/lib/types";
@@ -28,10 +29,18 @@ export function PersonPanel({
   const t = useT();
   const facts = useApi<Fact[]>(person ? `/api/facts?kind=fact&person_id=${person.id}` : null).data ?? [];
   const [aliases, setAliases] = useState("");
+  const [other, setOther] = useState("");
+  const [rel, setRel] = useState("");
+  const [relError, setRelError] = useState("");
   const personId = person?.id;
   const personAliases = person?.aliases.join(", ") ?? "";
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reset the field when another person opens
-  useEffect(() => setAliases(personAliases), [personId]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset the fields when another person opens
+  useEffect(() => {
+    setAliases(personAliases);
+    setOther("");
+    setRel("");
+    setRelError("");
+  }, [personId]);
   const names = new Map(graph.people.map((p) => [p.id, p.name]));
   const rels = person ? graph.relations.filter((r) => r.a === person.id || r.b === person.id) : [];
 
@@ -45,6 +54,20 @@ export function PersonPanel({
       /* api() already showed the error */
     }
   };
+  // the keyboard and phone way to link two people; dragging on the graph does the same
+  const addRel = async () => {
+    if (!person || !other || !rel.trim()) return;
+    try {
+      await post("/api/relations", { a: person.id, rel: rel.trim(), b: Number(other) }, "POST", { inline: [422] });
+      setRel("");
+      setRelError("");
+      toast.success(t("common.saved"));
+      onChanged();
+    } catch (e) {
+      setRelError(e instanceof ApiError ? e.message : String(e));
+    }
+  };
+  const otherName = names.get(Number(other));
   const deleteRel = async (id: number) => {
     try {
       await api(`/api/relations/${id}`, { method: "DELETE" });
@@ -104,6 +127,43 @@ export function PersonPanel({
                   ) : (
                     <p className="text-muted-foreground text-sm">{t("people.noRelations")}</p>
                   )}
+                  <div className="flex flex-col gap-2 rounded-md border p-2">
+                    <Select value={other} onValueChange={setOther}>
+                      <SelectTrigger size="sm" aria-label={t("people.otherPerson")} className="w-full">
+                        <SelectValue placeholder={t("people.otherPerson")} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {graph.people
+                          .filter((p) => p.id !== person.id)
+                          .map((p) => (
+                            <SelectItem key={p.id} value={String(p.id)}>
+                              {p.name}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                    <Label htmlFor="relation-new">{t("people.relation")}</Label>
+                    <Input
+                      id="relation-new"
+                      value={rel}
+                      maxLength={60}
+                      onChange={(e) => setRel(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && void addRel()}
+                    />
+                    <p className="text-muted-foreground text-xs">
+                      {otherName ? t("people.relationHint", { a: person.name, b: otherName }) : t("people.connectHint")}
+                    </p>
+                    {relError ? <p className="text-bad text-xs">{relError}</p> : null}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="self-start"
+                      disabled={!other || !rel.trim()}
+                      onClick={addRel}
+                    >
+                      {t("people.addRelation")}
+                    </Button>
+                  </div>
                 </section>
                 <section className="flex flex-col gap-2">
                   <h3 className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
