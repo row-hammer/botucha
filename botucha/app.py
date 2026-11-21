@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Protocol
 
 from .backup import daily_backup
+from .images import image_text
 from .brain import PromptContext, generate_reply_ex
 from .commands import CommandContext, handle_command, load_trigger_state, message_link, parse_command
 from .config import Config
@@ -55,6 +56,7 @@ class Incoming:
     reply_to_bot: bool
     mentions_bot: bool
     edited: bool
+    image_file_id: str | None = None  # a photo: only Telegram's id, downloaded when he replies
 
 
 @dataclass
@@ -162,12 +164,14 @@ class Botucha:
                     except Exception as e:
                         log.warning("could not leave chat %d: %s", m.chat_id, e)
             return
+        if m.image_file_id:
+            m.text = image_text(m.text)
         if m.edited:
             self.store.update_message_text(m.chat_id, m.msg_id, m.text)
             return
         own = m.is_bot or m.user_id == self.bot_user_id
         self.store.add_message(StoredMessage(m.chat_id, m.msg_id, m.user_id, m.name, m.ts, m.text,
-                                             m.reply_to, own))
+                                             m.reply_to, own, m.image_file_id))
         if not own:
             self.store.upsert_member(m.user_id, m.name, m.username)
             self.memory.ensure_member_person(m.user_id, m.name, m.username)

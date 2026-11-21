@@ -81,6 +81,7 @@ class StoredMessage:
     text: str
     reply_to: int | None = None
     is_bot: bool = False
+    image_file_id: str | None = None
 
 
 @dataclass
@@ -110,11 +111,11 @@ class Member:
     username: str | None
 
 
-_COLS = "chat_id, msg_id, user_id, name, ts, text, reply_to, is_bot"
+_COLS = "chat_id, msg_id, user_id, name, ts, text, reply_to, is_bot, image_file_id"
 
 
 def _row(r: tuple) -> StoredMessage:
-    return StoredMessage(r[0], r[1], r[2], r[3], r[4], r[5], r[6], bool(r[7]))
+    return StoredMessage(r[0], r[1], r[2], r[3], r[4], r[5], r[6], bool(r[7]), r[8])
 
 
 class Store:
@@ -129,6 +130,8 @@ class Store:
         self.conn.commit()
 
     def _migrate(self) -> None:
+        if "image_file_id" not in {r[1] for r in self.conn.execute("PRAGMA table_info(messages)")}:
+            self.conn.execute("ALTER TABLE messages ADD COLUMN image_file_id TEXT")
         for table in ("feedback", "corrections"):
             cols = {r[1] for r in self.conn.execute(f"PRAGMA table_info({table})")}
             if "reviewed" not in cols:
@@ -136,8 +139,8 @@ class Store:
 
     def add_message(self, m: StoredMessage) -> bool:
         cur = self.conn.execute(
-            f"INSERT OR IGNORE INTO messages ({_COLS}) VALUES (?,?,?,?,?,?,?,?)",
-            (m.chat_id, m.msg_id, m.user_id, m.name, m.ts, m.text, m.reply_to, int(m.is_bot)))
+            f"INSERT OR IGNORE INTO messages ({_COLS}) VALUES (?,?,?,?,?,?,?,?,?)",
+            (m.chat_id, m.msg_id, m.user_id, m.name, m.ts, m.text, m.reply_to, int(m.is_bot), m.image_file_id))
         self.conn.commit()
         return cur.rowcount == 1
 

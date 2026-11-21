@@ -13,6 +13,7 @@ from aiogram.types import Message, MessageReactionUpdated, ReactionTypeEmoji, Re
 
 from .app import Botucha, Incoming
 from .config import load_config
+from .images import MAX_SIDE
 from .embed import OllamaEmbedder
 from .llm import OllamaLLM
 from .memory import Memory
@@ -37,6 +38,16 @@ def load_env(path: Path) -> dict[str, str]:
     return out
 
 
+def pick_photo(sizes) -> object | None:
+    """The largest size that fits MAX_SIDE, or the smallest one if none fits."""
+    if not sizes:
+        return None
+    fits = [s for s in sizes if max(s.width, s.height) <= MAX_SIDE]
+    if fits:
+        return max(fits, key=lambda s: s.width * s.height)
+    return min(sizes, key=lambda s: s.width * s.height)
+
+
 def to_incoming(m: Message, me: User, *, edited: bool) -> Incoming:
     text = m.text or m.caption or ""
     user = m.from_user
@@ -53,7 +64,8 @@ def to_incoming(m: Message, me: User, *, edited: bool) -> Incoming:
         is_bot=bool(user and user.is_bot), ts=ts, text=text,
         reply_to=parent.message_id if parent else None,
         reply_to_bot=bool(parent and parent.from_user and parent.from_user.id == me.id),
-        mentions_bot=mentions_bot, edited=edited)
+        mentions_bot=mentions_bot, edited=edited,
+        image_file_id=photo.file_id if (photo := pick_photo(m.photo)) else None)
 
 
 class AiogramOutbox:
