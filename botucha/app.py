@@ -3,7 +3,9 @@ Telegram specifics live in __main__.py behind the Outbox protocol and the Incomi
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import datetime as dt
+import json
 import logging
 import re
 from collections import defaultdict, deque
@@ -47,6 +49,7 @@ BOT_NAME = "Botucha"
 COMMAND_FAILED = "nepavyko, pabandyk veliau"
 TG_LIMIT = 4000
 FEEDBACK_ALIASES = {"geras": "gerai", "blogas": "blogai"}
+RECOVER_S = 600  # a direct call cut off by a restart is answered afterwards if it is at most this old
 
 
 @dataclass
@@ -396,22 +399,80 @@ class Botucha:
                 names.append(mem.username)
         return names
 
+    # ---- surviving restarts and crashes ---------------------------------
+    def save_pending(self, jobs: list[Job]) -> None:
+        """Jobs that have not been answered yet, so the next start can still answer them."""
+        rows = [{**dataclasses.asdict(j), "links": getattr(j, "links", False)} for j in jobs]
+        try:
+            self.store.set_state("pending_replies", json.dumps(rows))
+        except Exception as e:
+            log.warning("cannot save pending replies: %s", e)
+
+    def recover(self) -> int:
+        """At start: answer again the direct calls the last run did not get to (crash, restart, a reply still
+        generating at shutdown), at most RECOVER_S old, and close the traces it left open. Returns the
+        number of replies queued."""
+        raw = self.store.get_state("pending_replies") or "[]"
+        self.store.set_state("pending_replies", "[]")
+        try:
+            rows = json.loads(raw)
+        except ValueError:
+            rows = []
+        n, seen = 0, set()
+        for r in rows if isinstance(rows, list) else []:
+            try:
+                job = ReplyJob(int(r["chat_id"]), int(r["msg_id"]), bool(r["direct"]), bool(r["serious"]),
+                               bool(r["recall"]), str(r.get("trigger") or ""), links=bool(r.get("links")))
+            except (KeyError, TypeError, ValueError):
+                continue
+            msg = self.store.get_message(job.chat_id, job.msg_id)
+            if (not job.direct or msg is None or self.clock() - msg.ts > RECOVER_S
+                    or job.chat_id not in self.cfg.telegram.chat_ids or (job.chat_id, job.msg_id) in seen):
+                continue
+            seen.add((job.chat_id, job.msg_id))
+            self.worker.submit(job)
+            n += 1
+        closed = self.store.conn.execute(
+            "UPDATE traces SET outcome='error', error='interrupted by a restart' "
+            "WHERE outcome IS NULL AND started < ?", (self.started_at,)).rowcount
+        self.store.conn.commit()
+        if n or closed:
+            log.info("after the restart: %d reply(s) queued again, %d unfinished trace(s) closed", n, closed)
+        return n
+
     async def run_job(self, jobs: list[Job]) -> None:
         by_chat: dict[int, list[Job]] = {}
         for j in jobs:
             by_chat.setdefault(j.chat_id, []).append(j)
-        for chat_id, chat_jobs in by_chat.items():
-            await self._reply(chat_id, chat_jobs)
+        self.save_pending(jobs)  # until answered: a crash from here on loses nothing
+        for chat_id, chat_jobs in list(by_chat.items()):
+            try:
+                await self._reply(chat_id, chat_jobs)
+            except Exception as e:  # a failure in one chat must not cost the others their reply
+                log.exception("reply in chat %d failed", chat_id)
+                self.last_error = f"{type(e).__name__}: {e}"
+            del by_chat[chat_id]
+            self.save_pending([j for js in by_chat.values() for j in js])
 
     async def _reply(self, chat_id: int, jobs: list[Job]) -> None:
-        direct = [j for j in jobs if j.direct]
-        recall = any(j.recall for j in jobs)
-        links = any(getattr(j, "links", False) for j in jobs)
         last = self.store.get_message(chat_id, jobs[-1].msg_id)
         trigger = "+".join(dict.fromkeys(j.trigger for j in jobs if j.trigger))
         run = (self.tracer.start("reply", chat_id=chat_id, msg_id=jobs[-1].msg_id,
                                  user_name=last.name if last else None, trigger=trigger)
                if self.tracer else NULL_RUN)
+        try:
+            await self._answer(chat_id, jobs, run)
+        except asyncio.CancelledError:
+            run.finish_once("error", error="interrupted: the bot stopped while answering")
+            raise
+        except Exception as e:
+            run.finish_once("error", error=f"{type(e).__name__}: {e}")
+            raise
+
+    async def _answer(self, chat_id: int, jobs: list[Job], run) -> None:
+        direct = [j for j in jobs if j.direct]
+        recall = any(j.recall for j in jobs)
+        links = any(getattr(j, "links", False) for j in jobs)
         result, hits = None, []
         try:
             try:  # one request's worth: a backlog is the learning loop's job, not this reply's

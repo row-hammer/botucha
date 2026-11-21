@@ -147,6 +147,11 @@ journalctl --user -u botucha -f           # logs
 systemctl --user restart botucha          # after editing persona.md or config.toml
 ```
 
+Stopping or restarting never drops a reply someone asked for: a reply being generated gets up to 60 s to go
+out (the unit allows 75), and whatever did not make it, or was cut off by a crash, is answered after the next
+start if the question is at most 10 minutes old. Uninvited replies are not repeated. If one of the bot's
+background loops dies, the bot exits with an error so systemd restarts it.
+
 The unit assumes the project lives in `~/Projects/botucha` and uv in mise's default path; adjust
 `WorkingDirectory` and `ExecStart` in `deploy/botucha.service` if yours differ.
 

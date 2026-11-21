@@ -99,3 +99,40 @@ async def test_pending_flag(setup):
     assert w.pending is True
     await asyncio.sleep(0.15)
     assert w.pending is False
+
+
+async def test_drain_finishes_the_running_batch_and_what_is_queued(setup):
+    w, batches, gate = setup
+    gate["block"] = asyncio.Event()
+    w.submit(job(1))
+    await asyncio.sleep(0.1)  # batch 1 is running and blocked
+    w.submit(job(2))          # queued behind it, still inside its quiet wait
+    asyncio.get_running_loop().call_later(0.05, gate["block"].set)
+    left = await w.drain(timeout_s=2)
+    assert left == [] and [[j.msg_id for j in b] for b in batches] == [[1], [2]]
+
+
+async def test_drain_does_not_wait_out_the_burst_timer(setup):
+    w, batches, _ = setup
+    w.quiet_s = w.max_wait_s = 30  # would wait half a minute for the chat to go quiet
+    w.submit(job(1))
+    left = await asyncio.wait_for(w.drain(timeout_s=5), 1)
+    assert left == [] and len(batches) == 1
+
+
+async def test_drain_gives_back_what_it_could_not_finish(setup):
+    w, batches, gate = setup
+    gate["block"] = asyncio.Event()  # never released: the reply hangs
+    w.submit(job(1))
+    await asyncio.sleep(0.1)
+    w.submit(job(2))
+    left = await w.drain(timeout_s=0.1)
+    assert [j.msg_id for j in left] == [1, 2]  # the hung one and the one behind it
+
+
+async def test_after_drain_new_jobs_are_not_taken(setup):
+    w, batches, _ = setup
+    await w.drain(timeout_s=1)
+    w.submit(job(9))
+    await asyncio.sleep(0.1)
+    assert batches == []

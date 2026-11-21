@@ -7,6 +7,7 @@ import asyncio
 import logging
 import os
 import random
+from collections.abc import Callable
 from pathlib import Path
 
 from aiogram import Bot, Dispatcher
@@ -25,6 +26,30 @@ from .store import Store
 from .trace import Tracer
 
 log = logging.getLogger("botucha")
+
+DRAIN_S = 60  # on stop, a reply being generated gets this long to go out (systemd waits TimeoutStopSec)
+
+
+def watch(task: asyncio.Task, on_fail: Callable[[], None]) -> None:
+    """A background loop that dies with an error stops the bot, so systemd restarts it instead of the bot
+    running on without learning, backups or the reply worker."""
+    def done(t: asyncio.Task) -> None:
+        if not t.cancelled() and t.exception() is not None:
+            log.critical("background task %s died", t.get_coro().__qualname__, exc_info=t.exception())
+            on_fail()
+    task.add_done_callback(done)
+
+
+async def shutdown(app: Botucha, tasks: list[asyncio.Task], *, drain_s: float = DRAIN_S) -> None:
+    """Let the reply being generated (and any queued behind it) go out, keep what did not make it for the
+    next start, then stop the loops."""
+    left = await app.worker.drain(drain_s)
+    if left:
+        log.warning("stopping with %d reply(s) unfinished; they are answered after the restart", len(left))
+        app.save_pending(left)
+    for t in tasks:
+        t.cancel()
+    await asyncio.gather(*tasks, return_exceptions=True)
 
 
 def load_env(path: Path) -> dict[str, str]:
@@ -154,13 +179,21 @@ async def main(config_path: Path) -> None:
     tasks = [asyncio.create_task(app.worker.run()), asyncio.create_task(app.learn_loop()),
              asyncio.create_task(bootstrap()), asyncio.create_task(app.state_loop()),
              asyncio.create_task(app.maintenance_loop())]
+    failed = []
+
+    def fail() -> None:
+        failed.append(True)
+        asyncio.get_running_loop().create_task(dp.stop_polling())
+    for t in tasks:
+        watch(t, fail)
+    app.recover()  # replies the last run did not get to, and traces it left open
     try:
         await dp.start_polling(tg, allowed_updates=["message", "edited_message", "message_reaction"])
     finally:
-        await app.worker.stop()
-        for t in tasks:
-            t.cancel()
+        await shutdown(app, tasks)
         await tg.session.close()
+    if failed:
+        raise SystemExit(1)  # Restart=on-failure needs a non-zero exit
 
 
 def cli() -> None:

@@ -33,6 +33,7 @@ class TraceRun:
         self.store, self.id, self.clock, self.perf, self._t0 = store, trace_id, clock, perf, t0
         self._seq = 0
         self._started = clock()
+        self.finished = False
 
     def _write(self, sql: str, args: tuple) -> None:
         if self.store is None or self.id is None:
@@ -64,8 +65,14 @@ class TraceRun:
             self.add_step(kind, name=name, status=h.status, duration_ms=(self.perf() - t) * 1000,
                           detail=h.detail, prompt=h.prompt, started=started)
 
+    def finish_once(self, outcome: str, **kw) -> None:
+        """finish(), unless the run already has an outcome (a safety net for unexpected exits)."""
+        if not self.finished:
+            self.finish(outcome, **kw)
+
     def finish(self, outcome: str, *, reply: str | None = None, error: str | None = None,
                sent: Iterable[tuple[int, int]] = ()) -> None:
+        self.finished = True
         self._write("UPDATE traces SET outcome=?, reply=?, error=?, duration_ms=? WHERE id=?",
                     (outcome, reply, error, (self.perf() - self._t0) * 1000, self.id))
         for chat_id, msg_id in sent:
