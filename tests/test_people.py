@@ -187,3 +187,29 @@ async def test_people_lines_keep_the_newest_facts():
     line = m.people_lines()[0]
     assert "numeris 8" in line and "numeris 3" in line and "numeris 2" not in line
     assert line.index("numeris 3") < line.index("numeris 8")  # still oldest to newest among those shown
+
+
+def test_two_members_with_the_same_name_are_two_people():
+    m = Memory(Store(":memory:"), FakeEmbedder(), clock=lambda: 1000.0)
+    relinks = []
+    real = m.relink_all
+    m.relink_all = lambda: (relinks.append(1), real())[1]
+    for i in range(6):
+        m.ensure_member_person(111 if i % 2 == 0 else 222, "Tomas", "tomas_a" if i % 2 == 0 else "tomas_b")
+    rows = m.db.execute("SELECT name, user_id FROM people ORDER BY id").fetchall()
+    assert [u for _, u in rows] == [111, 222] and rows[0][0] == "Tomas" and "tomas_b" in rows[1][0]
+    assert len(relinks) == 2  # once per new person, not once per message
+
+
+def test_a_friend_who_joins_the_group_keeps_their_person():
+    m = Memory(Store(":memory:"), FakeEmbedder(), clock=lambda: 1000.0)
+    pid = m.add_person("Ona", ["onute"])  # added by the admin while she was not in the group
+    m.ensure_member_person(333, "Ona", None)
+    assert m.db.execute("SELECT id, user_id FROM people").fetchall() == [(pid, 333)]
+
+
+def test_admin_aliases_never_move_a_member_to_another_account():
+    m = Memory(Store(":memory:"), FakeEmbedder(), clock=lambda: 1000.0)
+    m.ensure_member_person(111, "Tomas", None)
+    m.add_person("Tomas", ["tomukas"], user_id=222)
+    assert m.db.execute("SELECT user_id, aliases FROM people").fetchall() == [(111, "tomukas")]

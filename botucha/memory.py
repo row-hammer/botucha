@@ -271,7 +271,8 @@ class Memory:
         cur = self._people_rows("WHERE name=?", (name,))
         if cur:
             merged = list(dict.fromkeys(cur[0].aliases + clean))
-            self.db.execute("UPDATE people SET aliases=?, user_id=COALESCE(?, user_id) WHERE id=?",
+            # an existing member link is kept: a name can never move a person to another account
+            self.db.execute("UPDATE people SET aliases=?, user_id=COALESCE(user_id, ?) WHERE id=?",
                             (",".join(merged), user_id, cur[0].id))
             pid = cur[0].id
         else:
@@ -281,8 +282,21 @@ class Memory:
         return pid
 
     def ensure_member_person(self, user_id: int, name: str, username: str | None) -> None:
-        if not self._people_rows("WHERE user_id=?", (user_id,)):
+        """Every member has exactly one person, found by user id. A person of that name without an account
+        (a friend the admin added, who has now joined) becomes theirs; a name another member already has gets
+        a distinct one, so two people called the same are never merged."""
+        if self._people_rows("WHERE user_id=?", (user_id,)):
+            return
+        same = self._people_rows("WHERE name=?", (name,))
+        if same and same[0].user_id is None:
             self.add_person(name, [username] if username else [], user_id)
+            return
+        if same:
+            base = f"{name} (@{username})" if username else f"{name} ({user_id})"
+            name, n = base, 2
+            while self._people_rows("WHERE name=?", (name,)):
+                name, n = f"{base} {n}", n + 1
+        self.add_person(name, [username] if username else [], user_id)
 
     @staticmethod
     def _terms(p: Person) -> list[list[str]]:
