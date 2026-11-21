@@ -66,6 +66,8 @@ export interface Fact {
   source: string;
   created: number;
   updated: number;
+  /** the chat it came from; null = the dashboard, or from before this was recorded */
+  chat_id: number | null;
   people: number[];
 }
 

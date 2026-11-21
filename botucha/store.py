@@ -25,7 +25,8 @@ CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(text, content='chunks',
 CREATE TABLE IF NOT EXISTS facts (
     id INTEGER PRIMARY KEY, kind TEXT NOT NULL CHECK (kind IN ('fact', 'slang')),
     text TEXT NOT NULL, about INTEGER, source TEXT NOT NULL,
-    created REAL NOT NULL, updated REAL NOT NULL, emb BLOB NOT NULL
+    created REAL NOT NULL, updated REAL NOT NULL, emb BLOB NOT NULL,
+    chat_id INTEGER  -- the chat it came from, NULL for the dashboard or from before this was recorded
 );
 CREATE VIRTUAL TABLE IF NOT EXISTS facts_fts USING fts5(text, content='facts', content_rowid='id');
 CREATE TABLE IF NOT EXISTS profiles (
@@ -147,6 +148,8 @@ class Store:
     def _migrate(self) -> None:
         if "image_file_id" not in {r[1] for r in self.conn.execute("PRAGMA table_info(messages)")}:
             self.conn.execute("ALTER TABLE messages ADD COLUMN image_file_id TEXT")
+        if "chat_id" not in {r[1] for r in self.conn.execute("PRAGMA table_info(facts)")}:
+            self.conn.execute("ALTER TABLE facts ADD COLUMN chat_id INTEGER")
         for table in ("feedback", "corrections"):
             cols = {r[1] for r in self.conn.execute(f"PRAGMA table_info({table})")}
             if "reviewed" not in cols:

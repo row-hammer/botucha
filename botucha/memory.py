@@ -30,6 +30,7 @@ class Fact:
     source: str
     created: float
     updated: float
+    chat_id: int | None = None  # the chat it came from; None = the dashboard, or not recorded
 
 
 @dataclass
@@ -164,15 +165,16 @@ class Memory:
         return self._query_vecs[query]
 
     # ---- facts and slang --------------------------------------------------
-    async def add_fact(self, kind: FactKind, text: str, about: int | None, source: str) -> int:
+    async def add_fact(self, kind: FactKind, text: str, about: int | None, source: str,
+                       chat_id: int | None = None) -> int:
         emb = (await self.embedder.embed([text]))[0]
-        return self._insert_fact(kind, text, about, source, emb)
+        return self._insert_fact(kind, text, about, source, emb, chat_id)
 
-    def _insert_fact(self, kind, text, about, source, emb) -> int:
+    def _insert_fact(self, kind, text, about, source, emb, chat_id: int | None = None) -> int:
         now = self.clock()
         cur = self.db.execute(
-            "INSERT INTO facts (kind, text, about, source, created, updated, emb) VALUES (?,?,?,?,?,?,?)",
-            (kind, text, about, source, now, now, _blob(emb)))
+            "INSERT INTO facts (kind, text, about, source, created, updated, emb, chat_id) VALUES (?,?,?,?,?,?,?,?)",
+            (kind, text, about, source, now, now, _blob(emb), chat_id))
         self.db.execute("INSERT INTO facts_fts (rowid, text) VALUES (?,?)", (cur.lastrowid, text))
         if kind == "fact":
             self._link(cur.lastrowid, text, about)
@@ -190,13 +192,14 @@ class Memory:
             self._link(fact_id, text, r[1])
         self.db.commit()
 
-    async def upsert_fact(self, kind: FactKind, text: str, about: int | None, source: str) -> tuple[int, bool]:
+    async def upsert_fact(self, kind: FactKind, text: str, about: int | None, source: str,
+                          chat_id: int | None = None) -> tuple[int, bool]:
         """(fact id, whether a new fact was added)."""
-        fid, outcome = await self.upsert_fact_ex(kind, text, about, source)
+        fid, outcome = await self.upsert_fact_ex(kind, text, about, source, chat_id)
         return fid, outcome == "added"
 
-    async def upsert_fact_ex(self, kind: FactKind, text: str, about: int | None,
-                             source: str) -> tuple[int, Literal["added", "updated", "kept"]]:
+    async def upsert_fact_ex(self, kind: FactKind, text: str, about: int | None, source: str,
+                             chat_id: int | None = None) -> tuple[int, Literal["added", "updated", "kept"]]:
         """Add a fact, or update the near-duplicate it repeats. A fact a person wrote (a chat command or the
         dashboard) is never changed by an automatic one: it is "kept" as it is and nothing is added."""
         emb = (await self.embedder.embed([text]))[0]
@@ -207,7 +210,7 @@ class Memory:
                 return best[0], "kept"
             self._set_fact_text(best[0], best[1], text, emb, about)
             return best[0], "updated"
-        return self._insert_fact(kind, text, about, source, emb), "added"
+        return self._insert_fact(kind, text, about, source, emb, chat_id), "added"  # an update keeps its origin
 
     async def update_fact(self, fact_id: int, text: str) -> bool:
         r = self.db.execute("SELECT text FROM facts WHERE id=?", (fact_id,)).fetchone()
@@ -228,7 +231,7 @@ class Memory:
 
     def _facts(self, where: str, args: tuple) -> list[Fact]:
         rows = self.db.execute(
-            f"SELECT id, kind, text, about, source, created, updated FROM facts {where} ORDER BY id", args)
+            f"SELECT id, kind, text, about, source, created, updated, chat_id FROM facts {where} ORDER BY id", args)
         return [Fact(*r) for r in rows]
 
     def facts_about(self, user_id: int | None) -> list[Fact]:

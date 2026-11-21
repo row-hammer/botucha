@@ -75,7 +75,7 @@ async def handle_command(name: str, args: str, sender_id: int, now: float, ctx: 
             return "neįsiminsiu, panašu į komandą man, ne į faktą"
         if mentions_bot(args, ctx.cfg.telegram.bot_name_regex):
             return "apie save faktų neįsimenu"
-        fid = await mem.add_fact("fact", args, None, f"cmd:{sender_id}")
+        fid = await mem.add_fact("fact", args, None, f"cmd:{sender_id}", ctx.chat_id)
         return f"isiminiau (#{fid})"
 
     if name == "slengas":
@@ -85,7 +85,7 @@ async def handle_command(name: str, args: str, sender_id: int, now: float, ctx: 
         text = f"{word.strip().lower()} = {meaning.strip()}"
         if len(text) > MAX_SLANG_CHARS or looks_like_instruction(text) or mentions_bot(text, ctx.cfg.telegram.bot_name_regex):
             return "neįsiminsiu, panašu į komandą man arba per ilga"
-        fid = await mem.add_fact("slang", text, None, f"cmd:{sender_id}")
+        fid = await mem.add_fact("slang", text, None, f"cmd:{sender_id}", ctx.chat_id)
         return f"ok, {text} (#{fid})"
 
     if name == "ka_zinai":

@@ -74,7 +74,8 @@ async def _embedded(coro):
 
 def _fact_json(mem, f) -> dict:
     return {"id": f.id, "kind": f.kind, "text": f.text, "about": f.about, "source": f.source,
-            "created": f.created, "updated": f.updated, "people": [p.id for p in mem.people_of_fact(f.id)]}
+            "created": f.created, "updated": f.updated, "chat_id": f.chat_id,
+            "people": [p.id for p in mem.people_of_fact(f.id)]}
 
 
 @router.get("/api/facts")

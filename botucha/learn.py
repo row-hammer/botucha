@@ -128,7 +128,7 @@ class _Tally:
 
 
 async def _store(memory: Memory, ext: Extraction, source: str, locked: frozenset[int], tally: _Tally,
-                 bot_name_regex: str) -> int:
+                 bot_name_regex: str, chat_id: int) -> int:
     n = 0
     for about, fact in ext.facts:
         if mentions_bot(fact, bot_name_regex):
@@ -148,7 +148,7 @@ async def _store(memory: Memory, ext: Extraction, source: str, locked: frozenset
         if touched & locked:
             tally.facts_rejected.append({"text": fact[:200], "reason": "locked"})
             continue  # owner keeps this member's memory by hand
-        _, outcome = await memory.upsert_fact_ex("fact", fact, uid, source)
+        _, outcome = await memory.upsert_fact_ex("fact", fact, uid, source, chat_id)
         if outcome == "kept":
             tally.facts_rejected.append({"text": fact[:200], "reason": "curated"})  # a person already wrote this one
             continue
@@ -163,7 +163,7 @@ async def _store(memory: Memory, ext: Extraction, source: str, locked: frozenset
             tally.slang_rejected.append({"text": entry[:200], "reason": "too_long" if len(word) + len(meaning) >
                                          MAX_SLANG_CHARS else "instruction"})
             continue
-        _, outcome = await memory.upsert_fact_ex("slang", entry, None, source)
+        _, outcome = await memory.upsert_fact_ex("slang", entry, None, source, chat_id)
         if outcome == "kept":
             tally.slang_rejected.append({"text": entry[:200], "reason": "curated"})
             continue
@@ -208,7 +208,7 @@ async def learn_once(memory: Memory, llm: LLM, chat_id: int, *, source: str = "a
                 break
             log.warning("learning: chunk %d was unreadable twice, moving on without it", group[0][0])
         else:
-            n += await _store(memory, ext, source, locked, tally, bot_name_regex)
+            n += await _store(memory, ext, source, locked, tally, bot_name_regex, chat_id)
             read = True
         memory.store.set_state(key, str(group[-1][0]))
     if read:
