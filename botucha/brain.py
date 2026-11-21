@@ -171,6 +171,7 @@ def is_repeat(line: str, recent_own: list[str] | tuple[str, ...], threshold: flo
 class ReplyResult:
     texts: list[str] | None
     fallback: bool = False  # sent from a fallback path (stray script stripped, or the less misspelled attempt)
+    image_used: bool = False  # the sent text came from an attempt that saw the image
 
 
 def _check(name: str, ok: bool, reason: str = "") -> dict:
@@ -245,7 +246,7 @@ async def generate_reply_ex(llm: LLM, ctx: PromptContext, *, num_predict: int, m
         run.add_step("filter", name=label, status=verdict or "ok", detail={"checks": checks},
                      duration_ms=(time.perf_counter() - t_filter) * 1000)
         if verdict is None:
-            return ReplyResult(texts)
+            return ReplyResult(texts, image_used=images is not None)
     if misspelled:  # both attempts had odd words: send the cleaner one rather than nothing
         return ReplyResult(min(misspelled)[2], fallback=True)
     return ReplyResult(fallback, fallback=True) if fallback else ReplyResult(None)

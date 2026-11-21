@@ -134,7 +134,7 @@ async def test_has_vision():
                 raise ConnectionError("down")
             return NS(capabilities=self.caps)
     llm = OllamaLLM(ModelCfg("m", "e", 1000, 10, "1m", "http://x"))
-    for caps, want in ((["completion", "vision"], True), (["completion"], False), (None, False)):
+    for caps, want in ((["completion", "vision"], True), (["completion"], False), (None, None)):
         llm.client = Client(caps)
         assert await llm.has_vision() is want
 
@@ -214,3 +214,91 @@ async def test_describe_trace(app):
     await settle()
     kinds = store.conn.execute("SELECT kind, outcome FROM traces ORDER BY id").fetchall()
     assert kinds == [("reply", "sent"), ("describe", "sent")]
+
+
+# ---- review fixes ---------------------------------------------------------
+async def test_caption_edit_keeps_description(app):
+    bot, store, llm, out = await vbot(app, ["gražu", "Katinas su akiniais."])
+    await bot.on_message(inc("botucha žiūrėk", image_file_id="F1"))
+    await settle()
+    await bot.on_message(inc("botucha žiūrėkit", image_file_id="F1", edited=True))
+    assert store.get_message(C, 1).text == "[nuotrauka: Katinas su akiniais.] botucha žiūrėkit"
+
+
+async def test_photo_then_separate_question_sees_photo(app):
+    bot, store, llm, out = await vbot(app, ["matau", "x"])
+    await bot.on_message(inc("", msg_id=1, image_file_id="F1"))          # no caption: not a reply trigger
+    await bot.on_message(inc("botucha ką manai?", msg_id=2))
+    await settle()
+    assert llm.calls[0]["images"] == [b"ONE"]
+
+
+async def test_album_sees_newest_photo(app):
+    bot, store, llm, out = await vbot(app, ["du", "x"])
+    await bot.on_message(inc("botucha kuri geresnė?", msg_id=1, image_file_id="F1"))
+    await bot.on_message(inc("", msg_id=2, image_file_id="F2"))
+    await settle()
+    assert llm.calls[0]["images"] == [b"TWO"]
+
+
+async def test_old_photo_is_not_picked_up(app):
+    bot, store, llm, out = await vbot(app, ["labas"])
+    await bot.on_message(inc("", msg_id=1, image_file_id="F1", ts=8_000.0))   # long before the question
+    await bot.on_message(inc("botucha labas", msg_id=2))
+    await settle()
+    assert llm.calls[0]["images"] is None
+
+
+async def test_command_in_caption_runs(app):
+    bot, store, llm, out = await vbot(app, ["ar verta?", "x"])
+    await bot.on_message(inc("/rimtai ar verta pirkti?", image_file_id="F1"))
+    await settle()
+    assert llm.calls[0]["images"] == [b"ONE"] and "RIMTAI" in llm.calls[0]["messages"][0]["content"]
+
+
+async def test_description_words_are_not_group_vocabulary(app):
+    bot, store, llm, out = await vbot(app, ["gražu", "Akiniuotas katinukas."])
+    await bot.on_message(inc("botucha žiūrėk", image_file_id="F1"))
+    await settle()
+    assert "akiniuotas" not in bot.vocabulary() and "žiūrėk" in bot.vocabulary()
+
+
+async def test_misspelled_description_is_rejected(app):
+    bot, store, llm, out = await vbot(app, ["gražu", "Katinas su žiurknodžiu."])
+
+    class Speller:
+        def unknown(self, texts):
+            return ["žiurknodžiu"] if any("žiurknodžiu" in t for t in texts) else []
+    bot.speller = Speller()
+    await bot.on_message(inc("botucha žiūrėk", image_file_id="F1"))
+    await settle()
+    assert store.get_message(C, 1).text == "[nuotrauka] botucha žiūrėk"
+
+
+async def test_vision_is_rechecked_after_startup_failure(app):
+    bot, store, llm, out = await vbot(app, ["ok", "x"])
+    bot.vision = False
+    answers = iter([None, True])
+
+    async def check():
+        return next(answers)
+    bot.vision_check = check
+    bot._vision_checked_at = -1e9
+    assert await bot._has_vision() is False        # Ollama unreachable: stays off for now
+    bot._vision_checked_at = -1e9                   # retry interval passed
+    assert await bot._has_vision() is True
+
+
+async def test_no_describe_after_image_attempt_failed(app):
+    bot, store, llm, out = await vbot(app, [RuntimeError("projector"), "tekstu atsakau"])
+    await bot.on_message(inc("botucha žiūrėk", image_file_id="F1"))
+    await settle()
+    assert [t for _, t, _ in out.sent] == ["tekstu atsakau"] and len(llm.calls) == 2
+
+
+async def test_bare_photo_does_not_search_memory_for_the_tag(app):
+    bot, store, llm, out = await vbot(app, ["ok", "x"])
+    await bot.memory.add_fact("fact", "nuotrauka su katinu buvo seniai", None, "auto")
+    await bot.on_message(inc("", mentions_bot=True, image_file_id="F1"))
+    await settle()
+    assert "nuotrauka su katinu" not in llm.calls[0]["messages"][0]["content"]

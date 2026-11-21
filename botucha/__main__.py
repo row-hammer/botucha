@@ -112,10 +112,13 @@ async def main(config_path: Path) -> None:
     me = await tg.get_me()
     log.info("logged in as @%s (%d)", me.username, me.id)
     llm = OllamaLLM(cfg.model)
-    vision = await llm.has_vision()
-    log.info("model %s, vision: %s", cfg.model.chat_model, "yes" if vision else "no (photos are kept as text only)")
+    found = await llm.has_vision()
+    vision = bool(found)
+    log.info("model %s, vision: %s", cfg.model.chat_model,
+             {True: "yes", False: "no (photos are kept as text only)", None: "unknown, Ollama not answering yet (retrying)"}[found])
     app = Botucha(cfg, store, memory, llm, AiogramOutbox(tg), rng=random.Random(), vision=vision,
                   bot_user_id=me.id, bot_username=me.username or "", prices=PriceClient(), tracer=Tracer(store))
+    app.vision_check = llm.has_vision
     app.speller = Speller(Path(__file__).resolve().parent.parent / "data" / "hunspell" / "lt", vocab=app.vocabulary)
     dp = Dispatcher()
 

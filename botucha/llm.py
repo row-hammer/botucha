@@ -49,11 +49,12 @@ class OllamaLLM:
     async def chat(self, messages: list[dict], *, num_predict: int, fmt_json: bool = False) -> str:
         return (await self.chat_ex(messages, num_predict=num_predict, fmt_json=fmt_json)).text
 
-    async def has_vision(self) -> bool:
+    async def has_vision(self) -> bool | None:
+        """True/False from the model's capabilities; None when Ollama cannot be asked right now."""
         try:
             return "vision" in ((await self.client.show(self.cfg.chat_model)).capabilities or [])
         except Exception:
-            return False
+            return None
 
     async def chat_ex(self, messages: list[dict], *, num_predict: int, fmt_json: bool = False,
                       images: list[bytes] | None = None) -> ChatResult:

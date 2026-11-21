@@ -15,8 +15,9 @@ from pathlib import Path
 from typing import Protocol
 
 from .backup import daily_backup
-from .images import (DESCRIBE_NUM_PREDICT, DESCRIBE_PROMPT, FETCH_TIMEOUT_S, MAX_IMAGE_BYTES,
-                     caption_of, clean_description, described_text, image_text)
+from .images import (DESCRIBE_NUM_PREDICT, DESCRIBE_PROMPT, DESCRIBE_TIMEOUT_S, FETCH_TIMEOUT_S, IMAGE_GUARD,
+                     IMAGE_WINDOW_S, MAX_IMAGE_BYTES, caption_of, clean_description, described_text,
+                     description_of, image_text, retag)
 from .llm import chat_ex
 from .brain import PromptContext, generate_reply_ex
 from .commands import CommandContext, handle_command, load_trigger_state, message_link, parse_command
@@ -38,6 +39,7 @@ CANNED = "servas perkaito, palauk"
 HISTORY_N = 40
 OWN_LINES_IN_HISTORY = 5  # fewer of his own lines = less copying himself
 RECENT_OWN_N = 20
+VISION_RECHECK_S = 300
 BOT_NAME = "Botucha"
 COMMAND_FAILED = "nepavyko, pabandyk veliau"
 TG_LIMIT = 4000
@@ -96,6 +98,8 @@ class Botucha:
         self.state.quiet_until = float(store.get_state("quiet_until", "0") or 0)
         self.tracer = tracer
         self.vision = vision  # the chat model can see images (checked at startup)
+        self.vision_check: Callable[[], Awaitable[bool | None]] | None = None  # set by __main__
+        self._vision_checked_at = -1e18
         self._last_error: str | None = None
         store.set_state("bot_started_at", str(self.started_at))
         self._ignored_chats: set[int] = set()
@@ -168,8 +172,13 @@ class Botucha:
                     except Exception as e:
                         log.warning("could not leave chat %d: %s", m.chat_id, e)
             return
+        command_text = m.text  # a photo's caption can be a command (/rimtai on a chart)
         if m.image_file_id:
-            m.text = image_text(m.text)
+            if m.edited:  # caption fixed later: keep a description already written
+                old = self.store.get_message(m.chat_id, m.msg_id)
+                m.text = retag(old.text if old else None, m.text)
+            else:
+                m.text = image_text(m.text)
         if m.edited:
             self.store.update_message_text(m.chat_id, m.msg_id, m.text)
             return
@@ -182,8 +191,8 @@ class Botucha:
         self.worker.activity()
         now = self.clock()
 
-        if m.text.startswith("/") and not own:
-            parsed = parse_command(m.text, self.bot_username)
+        if command_text.startswith("/") and not own:
+            parsed = parse_command(command_text, self.bot_username)
             if parsed and m.ts < self.started_at:
                 return  # sent while offline: stored, never executed or answered (spec §4)
             if parsed:
@@ -311,7 +320,8 @@ class Botucha:
         words: set[str] = set()
         for (text,) in self.store.conn.execute("SELECT text FROM messages WHERE is_bot=0 AND user_id != ?",
                                                (self.bot_user_id,)):
-            words.update(w.lower() for w in re.findall(r"[^\W\d_]+", text))
+            # caption only: a [nuotrauka: …] description is Botucha's wording, not the group's
+            words.update(w.lower() for w in re.findall(r"[^\W\d_]+", caption_of(text) if text.startswith("[nuotrauka") else text))
         for t in self.memory.all_slang():
             words.update(w.lower() for w in re.findall(r"[^\W\d_]+", t.split("=", 1)[0]))
         for mem in self.store.members().values():
@@ -353,12 +363,16 @@ class Botucha:
                 convo = [m for m in recent if not m.text.startswith("/") or m.msg_id in ids]
                 history = self._trim_own(convo)
                 st.detail.update(history=len(history), own_dropped=len(convo) - len(history))
+                if not self.vision:
+                    await self._has_vision()
                 image_msg = self._pick_image(chat_id, jobs)
                 image = await self._fetch_image(image_msg, st.detail) if image_msg else None
-            query = "\n".join(m.text for m in history if m.msg_id in ids) or (history[-1].text if history else "")
+            # a photo's tag is not what anyone is talking about: search by captions and words only
+            query = "\n".join(caption_of(m.text) for m in history if m.msg_id in ids).strip() \
+                or (caption_of(history[-1].text) if history else "")
             with run.step("retrieval") as st:
-                hits = await self.memory.search_chunks(query, k=6 if recall else 3, chat_id=chat_id)
-                scored = await self.memory.search_facts_scored(query, k=5)
+                hits = await self.memory.search_chunks(query, k=6 if recall else 3, chat_id=chat_id) if query else []
+                scored = await self.memory.search_facts_scored(query, k=5) if query else []
                 facts = [f for f, _, _ in scored]
                 prices = [format_quote(q) for q in await self.prices.quotes(detect_symbols(query, self.aliases))] \
                     if self.prices else []
@@ -408,24 +422,44 @@ class Botucha:
             return
         run.finish("fallback" if result.fallback else "sent", reply="\n".join(texts),
                    sent=[(chat_id, mid) for mid in sent])
-        if image is not None and image_msg is not None:
+        if image is not None and image_msg is not None and result.image_used \
+                and not description_of(image_msg.text):  # already described: don't redo it
             await self._describe(chat_id, image_msg, image)
 
     # ---- images ----------------------------------------------------------
     def _pick_image(self, chat_id: int, jobs: list[Job]) -> StoredMessage | None:
-        """At most one image per reply: the one the answered message replies to, else the newest in the burst."""
+        """At most one image per reply: a photo one of the answered messages replies to; otherwise the newest
+        photo posted in the last IMAGE_WINDOW_S up to the answered message (albums, "photo, then ask")."""
         if not self.vision:
             return None
-        last = self.store.get_message(chat_id, jobs[-1].msg_id)
-        if last and last.reply_to:
-            parent = self.store.get_message(chat_id, last.reply_to)
+        answered = [m for j in jobs if (m := self.store.get_message(chat_id, j.msg_id))]
+        for m in reversed(answered):
+            parent = self.store.get_message(chat_id, m.reply_to) if m.reply_to else None
             if parent and parent.image_file_id:
                 return parent
-        for job in reversed(jobs):
-            m = self.store.get_message(chat_id, job.msg_id)
-            if m and m.image_file_id:
+        if not answered:
+            return None
+        newest = max(answered, key=lambda m: m.ts)
+        for m in reversed(self.store.recent_messages(chat_id, HISTORY_N)):
+            if m.user_id == self.bot_user_id or m.is_bot:
+                break  # he already answered everything before his own last line
+            if m.image_file_id and newest.ts - IMAGE_WINDOW_S <= m.ts <= newest.ts + IMAGE_WINDOW_S:
                 return m
         return None
+
+    async def _has_vision(self) -> bool:
+        """Startup can race Ollama: re-ask at most every VISION_RECHECK_S until it answers."""
+        if self.vision or self.vision_check is None:
+            return self.vision
+        now = self.clock()
+        if now - self._vision_checked_at < VISION_RECHECK_S:
+            return False
+        self._vision_checked_at = now
+        found = await self.vision_check()
+        if found is not None:
+            self.vision = found
+            log.info("vision: %s", "yes" if found else "no")
+        return self.vision
 
     async def _fetch_image(self, msg: StoredMessage, detail: dict) -> bytes | None:
         """Download into memory only; on any problem the reply goes on without the image."""
@@ -446,11 +480,16 @@ class Botucha:
                                 trigger="image") if self.tracer else NULL_RUN
         try:
             with run.step("generation", "attempt 1") as st:
-                res = await chat_ex(self.llm, [{"role": "user", "content": DESCRIBE_PROMPT}],
-                                    num_predict=DESCRIBE_NUM_PREDICT, images=[image])
+                res = await asyncio.wait_for(
+                    chat_ex(self.llm, [{"role": "system", "content": IMAGE_GUARD},
+                                       {"role": "user", "content": DESCRIBE_PROMPT}],
+                            num_predict=DESCRIBE_NUM_PREDICT, images=[image]),
+                    DESCRIBE_TIMEOUT_S)
                 st.detail.update(res.stats)
                 st.detail["raw"] = res.text
             desc = clean_description(res.text)
+            if desc and self.speller and self.speller.unknown([desc]):
+                desc = None  # invented words would end up in memory as if someone wrote them
             run.add_step("filter", name="attempt 1", status="ok" if desc else "rejected",
                          detail={"checks": [{"name": "description", "ok": bool(desc),
                                              "reason": "" if desc else "empty, command, instruction or foreign script"}]})
