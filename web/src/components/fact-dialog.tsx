@@ -67,7 +67,7 @@ export function FactDialog({
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
-        <form onSubmit={submit} className="flex flex-col gap-4">
+        <form noValidate onSubmit={submit} className="flex flex-col gap-4">
           <DialogHeader>
             <DialogTitle>{fact ? `${t("memory.edit")} #${fact.id}` : t(`memory.add.${kind}`)}</DialogTitle>
             <DialogDescription>{kind === "slang" ? t("memory.slangHint") : t("memory.factHint")}</DialogDescription>

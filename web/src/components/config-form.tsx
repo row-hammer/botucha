@@ -86,7 +86,7 @@ export function ConfigForm() {
         <CardDescription>{t("settings.configHint")}</CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={submit} className="flex flex-col gap-4">
+        <form noValidate onSubmit={submit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="trigger_keywords">{t("settings.fields.trigger_keywords")}</Label>
             <Input id="trigger_keywords" {...form.register("trigger_keywords")} />
