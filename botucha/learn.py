@@ -97,7 +97,9 @@ async def learn_once(memory: Memory, llm: LLM, chat_id: int, *, source: str = "a
         person = memory.find_person(about) if about and uid is None else None
         if person and person.id not in {p.id for p in memory.people_in(fact)}:
             fact = f"{person.name} – {fact[:1].lower()}{fact[1:]}"  # keep who it is about inside the text
-        if uid in locked:
+        # locked under every name: the member the model named, the person it resolved, and anyone the text mentions
+        touched = {uid, person.user_id if person else None} | {p.user_id for p in memory.people_in(fact)}
+        if touched & locked:
             facts_rejected.append({"text": fact[:200], "reason": "locked"})
             continue  # owner keeps this member's memory by hand
         _, outcome = await memory.upsert_fact_ex("fact", fact, uid, source)

@@ -120,3 +120,19 @@ async def test_learning_leaves_a_member_taught_fact_alone_and_says_so():
     assert [f.text for f in mem.all_facts()] == ["tadas shortina vwce su 3x svertu kasdien"]
     detail = json.loads(s.conn.execute("SELECT detail FROM trace_steps WHERE kind='facts'").fetchone()[0])
     assert detail["added"] == [] and [r["reason"] for r in detail["rejected"]] == ["curated"]
+
+
+async def test_locked_member_is_locked_under_every_name():
+    """The model does not always put the member's exact name in "about": a word form, or nothing at all."""
+    s, mem = setup()
+    mem.ensure_member_person(111, "Tadas", "tadas")
+    mem.ensure_member_person(222, "mantas", None)
+    mem.set_aliases(mem.find_person("Tadas").id, ["tadas", "tadukas"])
+    await mem.index_new_chunks(C)
+    raw = json.dumps({"facts": [{"about": "tadukas", "text": "Tadukas prarado pinigus su opcionais"},
+                                {"about": None, "text": "Tadas slepia nuostolius nuo zmonos"},
+                                {"about": "mantas", "text": "mantas juokiasi is tadas nuostoliu"},
+                                {"about": "mantas", "text": "mantas zaidzia gta"}], "slang": []})
+    assert await learn_once(mem, FakeLLM([raw]), C, locked=frozenset({111})) == 1
+    assert [f.text for f in mem.all_facts()] == ["mantas zaidzia gta"]
+    assert mem.person_facts(mem.find_person("Tadas").id) == []

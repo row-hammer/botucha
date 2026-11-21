@@ -300,7 +300,8 @@ chunks and returns JSON with facts (about named people) and slang. Rules:
   wrote the existing one (`/isimink`, `/slengas`, the dashboard): those are never changed by learning;
 - facts that look like instructions or are too long are dropped;
 - facts about a known person always carry that person's name, so they link correctly;
-- members listed in `memory.locked_members` get no automatic facts and no profile refresh;
+- members listed in `memory.locked_members` get no automatic facts and no profile refresh; this holds under
+  every name and word form, and also for a fact about someone else that mentions them;
 - a private chat with him is never learned from: no facts, slang, profile lines or spell-check vocabulary come
   from it (`/isimink` and `/slengas` typed there still work, because that is teaching him on purpose);
 - profiles are regenerated every ~200 messages.
