@@ -6,6 +6,8 @@ import zlib
 
 import numpy as np
 
+from botucha.llm import ChatResult
+
 
 class FakeEmbedder:
     """Deterministic bag-of-words hashing: texts sharing words get high cosine."""
@@ -40,3 +42,8 @@ class FakeLLM:
         if isinstance(r, Exception):
             raise r
         return r
+
+    async def chat_ex(self, messages: list[dict], *, num_predict: int, fmt_json: bool = False) -> ChatResult:
+        text = await self.chat(messages, num_predict=num_predict, fmt_json=fmt_json)
+        n = len(text.split())
+        return ChatResult(text, {"model": "fake", "eval_count": n, "eval_ms": 10.0, "tok_s": n / 0.01})

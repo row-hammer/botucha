@@ -16,6 +16,7 @@ class Job:
     direct: bool
     serious: bool
     recall: bool
+    trigger: str = ""
 
 
 class ReplyWorker:

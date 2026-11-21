@@ -42,26 +42,35 @@ class PromptContext:
     people: list[str] = field(default_factory=list)
 
 
-def _system(ctx: PromptContext) -> str:
+def _system_parts(ctx: PromptContext) -> list[tuple[str, str]]:
     """Stable parts first so Ollama can reuse the cached prefix."""
-    parts = [ctx.persona.strip(), DATA_GUARD, PRICE_RULE]
+    parts = [("persona", ctx.persona.strip()), ("guard", DATA_GUARD), ("price_rule", PRICE_RULE)]
     if ctx.serious:
-        parts.append(SERIOUS_LINE)  # no style examples: they pull answers back to 5-word banter
+        parts.append(("serious", SERIOUS_LINE))  # no style examples: they pull answers back to 5-word banter
     else:
-        parts.append("Kaip grupe raso (tikri pavyzdziai):\n" + ctx.style_examples.strip())
+        parts.append(("style", "Kaip grupe raso (tikri pavyzdziai):\n" + ctx.style_examples.strip()))
     if ctx.profiles:
-        parts.append("Grupes nariai:\n" + "\n".join(f"- {n}: {p}" for n, p in ctx.profiles.items()))
+        parts.append(("profiles", "Grupes nariai:\n" + "\n".join(f"- {n}: {p}" for n, p in ctx.profiles.items())))
     if ctx.people:
-        parts.append("Žmonės ir ryšiai (kas yra kas ir kaip susiję; „A – darbdavys → B“ reiškia, kad A yra B darbdavys):\n" + "\n".join(f"- {p}" for p in ctx.people))
+        parts.append(("people", "Žmonės ir ryšiai (kas yra kas ir kaip susiję; „A – darbdavys → B“ reiškia, kad A yra B darbdavys):\n" + "\n".join(f"- {p}" for p in ctx.people)))
     if ctx.slang:
-        parts.append("Slengas:\n" + "\n".join(ctx.slang))
+        parts.append(("slang", "Slengas:\n" + "\n".join(ctx.slang)))
     if ctx.chunks:
-        parts.append("Ka prisimeni is senu pokalbiu:\n" + "\n---\n".join(ctx.chunks))
+        parts.append(("chunks", "Ka prisimeni is senu pokalbiu:\n" + "\n---\n".join(ctx.chunks)))
     if ctx.facts:
-        parts.append("Ka zinai:\n" + "\n".join(f"- {f}" for f in ctx.facts))
+        parts.append(("facts", "Ka zinai:\n" + "\n".join(f"- {f}" for f in ctx.facts)))
     if ctx.prices:  # volatile, so last: the stable prefix above stays cached
-        parts.append("Dabartiniai kainų duomenys (Yahoo, ką tik):\n" + "\n".join(f"- {p}" for p in ctx.prices))
-    return "\n\n".join(parts)
+        parts.append(("prices", "Dabartiniai kainų duomenys (Yahoo, ką tik):\n" + "\n".join(f"- {p}" for p in ctx.prices)))
+    return parts
+
+
+def _system(ctx: PromptContext) -> str:
+    return "\n\n".join(text for _, text in _system_parts(ctx))
+
+
+def prompt_sections(ctx: PromptContext) -> dict[str, int]:
+    """Characters per system prompt section, in prompt order."""
+    return {name: len(text) for name, text in _system_parts(ctx)}
 
 
 def _line(m: StoredMessage, bot_id: int) -> str:

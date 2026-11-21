@@ -54,6 +54,7 @@ class Relation:
 class ChunkHit:
     chunk: Chunk
     score: float
+    fts: bool = False
 
 
 def _blob(v: np.ndarray) -> bytes:
@@ -112,8 +113,9 @@ class Memory:
             "WHERE chat_id=? AND id>? ORDER BY id", (chat_id, chunk_id)).fetchall()
         return [(r[0], Chunk(*r[1:])) for r in rows]
 
-    async def _hybrid(self, table: str, query: str, k: int, where: str = "", args: tuple = ()) -> list[tuple[int, float]]:
-        """FTS top 10 ∪ cosine top 10, ranked by cosine. Returns (id, score)."""
+    async def _hybrid(self, table: str, query: str, k: int, where: str = "",
+                      args: tuple = ()) -> list[tuple[int, float, bool]]:
+        """FTS top 10 ∪ cosine top 10, ranked by cosine. Returns (id, cosine, matched by FTS)."""
         q = (await self.embedder.embed([query]))[0]
         rows = self.db.execute(f"SELECT id, emb FROM {table} {where}", args).fetchall()
         if not rows:
@@ -122,16 +124,18 @@ class Memory:
         mat = np.stack([_vec(r[1]) for r in rows])
         scores = mat @ q
         cand = {ids[i] for i in np.argsort(-scores)[:10]}
+        fts: set[int] = set()
         fq = fts_query(query)
         if fq:
             try:
                 hits = self.db.execute(
                     f"SELECT rowid FROM {table}_fts WHERE {table}_fts MATCH ? ORDER BY rank LIMIT 10", (fq,))
-                cand |= {r[0] for r in hits if r[0] in set(ids)}
+                fts = {r[0] for r in hits if r[0] in set(ids)}
             except Exception:
                 pass
+        cand |= fts
         score_of = dict(zip(ids, scores.tolist()))
-        return sorted(((i, score_of[i]) for i in cand), key=lambda x: -x[1])[:k]
+        return sorted(((i, score_of[i], i in fts) for i in cand), key=lambda x: -x[1])[:k]
 
     # ---- facts and slang --------------------------------------------------
     async def add_fact(self, kind: FactKind, text: str, about: int | None, source: str) -> int:
@@ -199,9 +203,12 @@ class Memory:
         return self._facts("", ())
 
     async def search_facts(self, query: str, k: int = 5) -> list[Fact]:
+        return [f for f, _, _ in await self.search_facts_scored(query, k)]
+
+    async def search_facts_scored(self, query: str, k: int = 5) -> list[tuple[Fact, float, bool]]:
         hits = await self._hybrid("facts", query, k, "WHERE kind='fact'")
         by_id = {f.id: f for f in self._facts("WHERE kind='fact'", ())}
-        return [by_id[i] for i, _ in hits if i in by_id]
+        return [(by_id[i], score, fts) for i, score, fts in hits if i in by_id]
 
     def slang_in(self, texts: list[str]) -> list[Fact]:
         tokens = {w for t in texts for w in re.findall(r"\w+", t.lower())}
@@ -352,8 +359,8 @@ class Memory:
     async def search_chunks(self, query: str, k: int = 3, chat_id: int | None = None) -> list[ChunkHit]:
         out = []
         where, args = ("WHERE chat_id=?", (chat_id,)) if chat_id is not None else ("", ())
-        for cid, score in await self._hybrid("chunks", query, k, where, args):
+        for cid, score, fts in await self._hybrid("chunks", query, k, where, args):
             r = self.db.execute("SELECT chat_id, first_msg_id, last_msg_id, start_ts, end_ts, text "
                                 "FROM chunks WHERE id=?", (cid,)).fetchone()
-            out.append(ChunkHit(Chunk(*r), score))
+            out.append(ChunkHit(Chunk(*r), score, fts))
         return out
