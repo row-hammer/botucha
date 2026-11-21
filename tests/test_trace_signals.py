@@ -1,4 +1,5 @@
 """What the trace needs from the pipeline: model stats, trigger reasons, prompt sizes, search scores."""
+import dataclasses
 from pathlib import Path
 
 import pytest
@@ -72,3 +73,16 @@ def test_ollama_stats_from_response():
     assert s["tok_s"] == pytest.approx(8.0) and s["eval_ms"] == pytest.approx(10_000.0)
     assert s["prompt_eval_count"] == 900 and s["load_ms"] == 0 and s["total_ms"] == pytest.approx(12_000.0)
     assert OllamaLLM._stats({"eval_count": 0, "eval_duration": 0})["tok_s"] is None
+
+
+def test_every_prompt_section_has_a_dashboard_label():
+    """The Thinking page labels each section of a trace's prompt step; an unlabelled one shows a raw key."""
+    import json
+    from pathlib import Path
+    ctx = PromptContext(persona="P", style_examples="S", profiles={"A": "x"}, slang=["a = b"], chunks=["C"], facts=["F"],
+                        history=[], bot_user_id=1, people=["Jonas: x"], prices=["NVDA 1"], image=b"x",
+                        spelling_notes=["a (ne b)"])
+    names = set(prompt_sections(ctx)) | set(prompt_sections(dataclasses.replace(ctx, serious=True))) | {"history"}
+    for lang in ("en", "lt"):
+        labels = json.loads((Path(__file__).parent.parent / "web" / "src" / "i18n" / f"{lang}.json").read_text())["sections"]
+        assert names <= set(labels), f"{lang}: no label for {sorted(names - set(labels))}"
