@@ -38,7 +38,9 @@ class ConfigIn(BaseModel):
 
 
 def persona_limit(cfg) -> int:
-    return cfg.model.num_ctx * 3 // 2  # half of the prompt budget (num_ctx * 3 chars)
+    """Half of the prompt budget: the rest is for the transcript and memory."""
+    from ..brain import prompt_budget_chars
+    return prompt_budget_chars(cfg.model.num_ctx, num_predict=cfg.model.num_predict, image=False) // 2
 
 
 @router.get("/api/persona")

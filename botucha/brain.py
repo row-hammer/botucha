@@ -31,6 +31,16 @@ PRICE_RULE = ("Konkrečias dabartines kainas ir pokyčius sakai TIK iš skilties
               "Jei tokios skilties nėra, nesakyk konkrečių kainų skaičių ir jų neišgalvok.")
 SERIOUS_MAX_LINES = 8
 SERIOUS_NUM_PREDICT = 450
+CHARS_PER_TOKEN = 2.74  # measured on the recorded prompts (Lithuanian chat, this model's tokenizer)
+BUDGET_CHARS_PER_TOKEN = 2.5  # the budget assumes denser text than measured, so a full prompt still fits
+IMAGE_TOKENS = 1024  # room kept for one image (an upper bound; the model's exact count is not reported)
+CONTEXT_MARGIN = 0.95  # template tokens, the role headers and rounding
+
+
+def prompt_budget_chars(num_ctx: int, *, num_predict: int, image: bool) -> int:
+    """Characters the prompt may use so that it, the answer and an image fit in num_ctx tokens."""
+    tokens = int(num_ctx * CONTEXT_MARGIN) - num_predict - (IMAGE_TOKENS if image else 0)
+    return max(0, int(tokens * BUDGET_CHARS_PER_TOKEN))
 
 
 @dataclass
@@ -286,7 +296,7 @@ async def generate_reply_ex(llm: LLM, ctx: PromptContext, *, num_predict: int, m
         messages = build_prompt(ctx, max_chars=max_chars)
         st.detail.update(prompt_sections(ctx))
         st.detail["history"] = len(messages[1]["content"]) - len(_memory(ctx))
-        st.detail["approx_tokens"] = sum(len(m["content"]) for m in messages) // 4
+        st.detail["approx_tokens"] = round(sum(len(m["content"]) for m in messages) / CHARS_PER_TOKEN)
         st.prompt = messages[0]["content"] + "\n\n" + messages[1]["content"]
         if ctx.image:
             st.detail["image"] = {"bytes": len(ctx.image)}

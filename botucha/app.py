@@ -21,7 +21,7 @@ from .images import (DESCRIBE_NUM_PREDICT, DESCRIBE_PROMPT, DESCRIBE_TIMEOUT_S, 
                      IMAGE_WINDOW_S, MAX_IMAGE_BYTES, caption_of, clean_description, described_text,
                      description_of, image_text, retag)
 from .llm import chat_ex
-from .brain import PromptContext, generate_reply_ex, stable_prompt
+from .brain import SERIOUS_NUM_PREDICT, PromptContext, generate_reply_ex, prompt_budget_chars, stable_prompt
 from .commands import CommandContext, handle_command, load_trigger_state, message_link, parse_command
 from .config import Config
 from .export_import import import_export, parse_export
@@ -550,7 +550,10 @@ class Botucha:
             if not ctx.serious:  # /rimtai has its own system message: warming it would evict the usual one
                 await self.warm_prompt(stable_prompt(ctx))  # only sends when it changed (persona, profiles, slang…)
             result = await generate_reply_ex(self.llm, ctx, num_predict=self.cfg.model.num_predict,
-                                             max_chars=self.cfg.model.num_ctx * 3,
+                                             max_chars=prompt_budget_chars(
+                                                 self.cfg.model.num_ctx, image=image is not None,
+                                                 num_predict=max(self.cfg.model.num_predict, SERIOUS_NUM_PREDICT)
+                                                 if ctx.serious else self.cfg.model.num_predict),
                                              member_names=self._member_names(), speller=self.speller,
                                              recent_own=self._recent_own(chat_id), run=run,
                                              proofread=self.proofreader, direct=bool(direct))

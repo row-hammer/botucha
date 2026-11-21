@@ -85,7 +85,8 @@ async def test_persona_rejects_empty_and_huge(web):
 async def test_persona_save_backs_up(web):
     client, deps, _ = await web()
     old = deps.cfg.paths.persona.read_text()
-    assert (await client.get("/api/persona")).json() == {"text": old, "limit": deps.cfg.model.num_ctx * 3 // 2}
+    from botucha.webapi.routes_settings import persona_limit
+    assert (await client.get("/api/persona")).json() == {"text": old, "limit": persona_limit(deps.cfg)}
     r = await client.put("/api/persona", json={"text": "tu esi botucha, naujas"})
     assert r.status_code == 200
     assert deps.cfg.paths.persona.read_text() == "tu esi botucha, naujas"
