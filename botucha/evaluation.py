@@ -24,6 +24,7 @@ from .config import load_config
 from .embed import OllamaEmbedder
 from .llm import OllamaLLM
 from .memory import Memory
+from .spell import Speller
 from .store import Store, StoredMessage
 
 EVAL_USER, EVAL_NAME = 1, "eval"
@@ -80,6 +81,7 @@ async def run_persona(cfg, prompts: list[dict], out_dir: Path) -> Path:
         out = CaptureOutbox()
         bot = Botucha(cfg, store, Memory(store, embedder), llm, out, rng=random.Random(i),
                       bot_user_id=0, bot_username="botucha_bot", sleep=_nosleep, started_at=0)
+        bot.speller = Speller(Path(__file__).resolve().parent.parent / "data" / "hunspell" / "lt", vocab=bot.vocabulary)
         msg_id = 10**9
         store.add_message(StoredMessage(chat_id, msg_id, EVAL_USER, EVAL_NAME, time.time(), p["text"]))
         t = time.time()

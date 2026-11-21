@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from collections import defaultdict, deque
 import random
 import time
@@ -28,6 +29,8 @@ log = logging.getLogger(__name__)
 
 CANNED = "servas perkaito, palauk"
 HISTORY_N = 40
+OWN_LINES_IN_HISTORY = 5  # fewer of his own lines = less copying himself
+RECENT_OWN_N = 20
 BOT_NAME = "Botucha"
 COMMAND_FAILED = "nepavyko, pabandyk veliau"
 TG_LIMIT = 4000
@@ -84,6 +87,7 @@ class Botucha:
         self._ignored_chats: set[int] = set()
         self._locked = frozenset(cfg.memory.locked_members)
         self.prices = prices if cfg.prices.enabled else None
+        self.speller = None  # set by __main__: Speller(dict, vocab=self.vocabulary)
         self.aliases = {**DEFAULT_ALIASES, **dict(cfg.prices.aliases)}
         self._calls: dict[int, deque[float]] = defaultdict(deque)
         self._bg_lock = asyncio.Lock()  # bootstrap and learning never overlap
@@ -224,6 +228,30 @@ class Botucha:
         return len(calls) > self.cfg.trigger.user_calls_per_min
 
     # ---- replies ---------------------------------------------------------
+    def _trim_own(self, history: list[StoredMessage]) -> list[StoredMessage]:
+        own = [i for i, m in enumerate(history) if m.user_id == self.bot_user_id]
+        drop = set(own[:-OWN_LINES_IN_HISTORY]) if len(own) > OWN_LINES_IN_HISTORY else set()
+        return [m for i, m in enumerate(history) if i not in drop]
+
+    def _recent_own(self, chat_id: int) -> list[str]:
+        rows = self.store.conn.execute(
+            "SELECT text FROM messages WHERE chat_id=? AND user_id=? ORDER BY rowid DESC LIMIT ?",
+            (chat_id, self.bot_user_id, RECENT_OWN_N)).fetchall()
+        return [r[0] for r in rows]
+
+    def vocabulary(self) -> set[str]:
+        """Words the group itself uses (members only, never Botucha), plus slang and names."""
+        words: set[str] = set()
+        for (text,) in self.store.conn.execute("SELECT text FROM messages WHERE is_bot=0 AND user_id != ?",
+                                               (self.bot_user_id,)):
+            words.update(w.lower() for w in re.findall(r"[^\W\d_]+", text))
+        for t in self.memory.all_slang():
+            words.update(w.lower() for w in re.findall(r"[^\W\d_]+", t.split("=", 1)[0]))
+        for mem in self.store.members().values():
+            words.update(w.lower() for w in re.findall(r"[^\W\d_]+", f"{mem.name} {mem.username or ''}"))
+        words.update({"botucha", "botuchos", "xd", "xdd", "xddd", "xdddd"})
+        return words
+
     def _member_names(self) -> list[str]:
         names = []
         for mem in self.store.members().values():
@@ -245,7 +273,7 @@ class Botucha:
         links = any(getattr(j, "links", False) for j in jobs)
         try:
             await self.memory.index_new_chunks(chat_id)
-            history = self.store.recent_messages(chat_id, HISTORY_N)
+            history = self._trim_own(self.store.recent_messages(chat_id, HISTORY_N))
             ids = {j.msg_id for j in jobs}
             query = "\n".join(m.text for m in history if m.msg_id in ids) or (history[-1].text if history else "")
             hits = await self.memory.search_chunks(query, k=6 if recall else 3, chat_id=chat_id)
@@ -261,7 +289,8 @@ class Botucha:
                 ctx.prices = [format_quote(q) for q in await self.prices.quotes(detect_symbols(query, self.aliases))]
             await self.outbox.typing(chat_id)
             texts = await generate_reply(self.llm, ctx, num_predict=self.cfg.model.num_predict,
-                                         max_chars=self.cfg.model.num_ctx * 3, member_names=self._member_names())
+                                         max_chars=self.cfg.model.num_ctx * 3, member_names=self._member_names(),
+                                         speller=self.speller, recent_own=self._recent_own(chat_id))
         except Exception as e:
             log.exception("reply preparation failed")
             self.last_error = f"{type(e).__name__}: {e}"

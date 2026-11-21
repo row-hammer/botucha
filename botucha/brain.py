@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 
 from .chunking import render_line
 from .guard import leaks_prompt
+from .trigger import fold
 from .llm import LLM
 from .store import StoredMessage
 
@@ -128,13 +129,35 @@ def strip_foreign(texts: list[str]) -> list[str]:
     return [t for t in out if t]
 
 
+def _norm_words(text: str) -> list[str]:
+    return re.findall(r"\w+", fold(text))
+
+
+def is_repeat(line: str, recent_own: list[str] | tuple[str, ...], threshold: float = 0.7) -> bool:
+    """Same or nearly the same as one of Botucha's recent messages."""
+    w = _norm_words(line)
+    if not w:
+        return False
+    ws = set(w)
+    for prev in recent_own:
+        p = _norm_words(prev)
+        if p == w:
+            return True
+        ps = set(p)
+        if len(ws) >= 3 and len(ps) >= 3 and len(ws & ps) / len(ws | ps) >= threshold:
+            return True
+    return False
+
+
 async def generate_reply(llm: LLM, ctx: PromptContext, *, num_predict: int, max_chars: int,
-                         member_names: list[str]) -> list[str] | None:
+                         member_names: list[str], speller=None,
+                         recent_own: list[str] | tuple[str, ...] = ()) -> list[str] | None:
     messages = build_prompt(ctx, max_chars=max_chars)
     if ctx.serious:
         num_predict = max(num_predict, SERIOUS_NUM_PREDICT)
     max_lines = SERIOUS_MAX_LINES if ctx.serious else MAX_LINES
     fallback: list[str] | None = None
+    misspelled: list[tuple[int, int, list[str]]] = []  # (unknown words, attempt, texts)
     for attempt in range(2):
         try:
             texts = clean_reply(await llm.chat(messages, num_predict=num_predict), member_names, max_lines)
@@ -144,9 +167,19 @@ async def generate_reply(llm: LLM, ctx: PromptContext, *, num_predict: int, max_
         if texts and leaks_prompt(" ".join(texts), ctx.persona):
             log.warning("reply repeated the persona text; regenerating")
             continue
+        texts = [t for t in texts if not is_repeat(t, recent_own)]  # never send the same line twice
+        if not texts:
+            continue
         if texts and any(has_foreign_script(t) for t in texts):
             fallback = strip_foreign(texts) or fallback  # model glitch: stray Hindi/Arabic/Turkish words
             continue
+        unknown = speller.unknown(texts) if speller else []
+        if unknown:
+            log.info("invented words %s; regenerating", unknown)
+            misspelled.append((len(unknown), attempt, texts))
+            continue
         if texts:
             return texts
+    if misspelled:  # both attempts had odd words: send the cleaner one rather than nothing
+        return min(misspelled)[2]
     return fallback or None

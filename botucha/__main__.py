@@ -17,6 +17,7 @@ from .embed import OllamaEmbedder
 from .llm import OllamaLLM
 from .memory import Memory
 from .prices import PriceClient
+from .spell import Speller
 from .store import Store
 
 log = logging.getLogger("botucha")
@@ -89,6 +90,7 @@ async def main(config_path: Path) -> None:
     log.info("logged in as @%s (%d)", me.username, me.id)
     app = Botucha(cfg, store, memory, OllamaLLM(cfg.model), AiogramOutbox(tg), rng=random.Random(),
                   bot_user_id=me.id, bot_username=me.username or "", prices=PriceClient())
+    app.speller = Speller(Path(__file__).resolve().parent.parent / "data" / "hunspell" / "lt", vocab=app.vocabulary)
     dp = Dispatcher()
 
     @dp.message()
