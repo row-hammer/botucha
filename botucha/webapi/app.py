@@ -19,7 +19,7 @@ from ..memory import Memory
 from ..store import Store
 from .service import ServiceControl
 
-HOSTS = {"127.0.0.1:8765", "localhost:8765"}
+DEFAULT_PORT = 8765
 DEV_HOSTS = {"localhost:3000", "127.0.0.1:3000"}
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 
@@ -36,11 +36,11 @@ class Deps:
     backups_dir: Path | None = None
 
 
-def create_app(deps: Deps, *, token: str | None = None, dev: bool = False) -> FastAPI:
+def create_app(deps: Deps, *, token: str | None = None, dev: bool = False, port: int = DEFAULT_PORT) -> FastAPI:
     app = FastAPI(title="Botucha", docs_url=None, redoc_url=None, openapi_url=None)
     app.state.deps = deps
     app.state.token = token or secrets.token_urlsafe(32)
-    hosts = HOSTS | (DEV_HOSTS if dev else set())
+    hosts = {f"127.0.0.1:{port}", f"localhost:{port}"} | (DEV_HOSTS if dev else set())
 
     @app.middleware("http")
     async def guard(request: Request, call_next):

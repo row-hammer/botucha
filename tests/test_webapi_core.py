@@ -59,3 +59,12 @@ async def test_root_serves_build(web, tmp_path):
     (out / "index.html").write_text("<html>botucha ui</html>")
     client, _, _ = await web(static_dir=out)
     assert "botucha ui" in (await client.get("/")).text
+
+
+async def test_hosts_follow_the_port(web):
+    from botucha.webapi.app import create_app
+    _, deps, _ = await web()
+    app = create_app(deps, token=TOKEN, port=9000)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://127.0.0.1:9000") as c:
+        assert (await c.get("/api/session")).status_code == 200
+        assert (await c.get("/api/session", headers={"Host": "127.0.0.1:8765"})).status_code == 400

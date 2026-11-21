@@ -45,13 +45,20 @@ export default function ControlsPage() {
   useEffect(loadJournal, [loadJournal]);
 
   const apply = async (body: Record<string, unknown>) => {
-    const st = await post<Status>("/api/control/state", body);
-    setStatus(st);
-    toast.success(t("controls.applied"));
+    try {
+      setStatus(await post<Status>("/api/control/state", body));
+      toast.success(t("controls.applied"));
+    } catch {
+      /* api() already showed the error */
+    }
   };
   const service = async (action: "start" | "stop" | "restart") => {
-    await post("/api/control/service", { action });
-    toast.success(t("controls.done"));
+    try {
+      await post("/api/control/service", { action });
+      toast.success(t("controls.done"));
+    } catch {
+      /* api() already showed the error (e.g. systemctl output) */
+    }
     setTimeout(loadJournal, 3000);
   };
   const quiet = s && s.quiet_until * 1000 > Date.now();

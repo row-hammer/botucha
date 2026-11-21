@@ -39,13 +39,21 @@ export function PersonPanel({
 
   const saveAliases = async () => {
     if (!person) return;
-    await post(`/api/people/${person.id}`, { aliases: aliases.split(",") }, "PUT");
-    toast.success(t("common.saved"));
-    onChanged();
+    try {
+      await post(`/api/people/${person.id}`, { aliases: aliases.split(",") }, "PUT");
+      toast.success(t("common.saved"));
+      onChanged();
+    } catch {
+      /* api() already showed the error */
+    }
   };
   const deleteRel = async (id: number) => {
-    await api(`/api/relations/${id}`, { method: "DELETE" });
-    toast.success(t("common.deleted"));
+    try {
+      await api(`/api/relations/${id}`, { method: "DELETE" });
+      toast.success(t("common.deleted"));
+    } catch {
+      /* api() already showed the error */
+    }
     onChanged();
   };
 

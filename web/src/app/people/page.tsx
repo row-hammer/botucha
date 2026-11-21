@@ -46,7 +46,7 @@ export default function PeoplePage() {
   const saveRelation = async () => {
     if (!link) return;
     try {
-      await post("/api/relations", { a: link.a, rel, b: link.b });
+      await post("/api/relations", { a: link.a, rel, b: link.b }, "POST", { inline: [422] });
       toast.success(t("common.saved"));
       setLink(null);
       setRel("");
@@ -57,7 +57,7 @@ export default function PeoplePage() {
   };
   const savePerson = async () => {
     try {
-      await post("/api/people", { name, aliases: aliases.split(",") });
+      await post("/api/people", { name, aliases: aliases.split(",") }, "POST", { inline: [422] });
       toast.success(t("common.saved"));
       setAdding(false);
       setName("");

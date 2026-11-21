@@ -30,8 +30,8 @@ def cli() -> None:
                 memory=Memory(store, OllamaEmbedder(cfg.model.ollama_host, cfg.model.embed_model)),
                 service=SystemdService(), static_dir=Path(__file__).resolve().parents[2] / "web" / "out",
                 backups_dir=config_path.parent / "backups")
-    app = create_app(deps, dev=os.environ.get("BOTUCHA_WEB_DEV") == "1")
-    uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning")
+    app = create_app(deps, dev=os.environ.get("BOTUCHA_WEB_DEV") == "1", port=args.port)
+    uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning", timeout_graceful_shutdown=3)
 
 
 if __name__ == "__main__":

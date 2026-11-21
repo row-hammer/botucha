@@ -20,9 +20,9 @@ EDITABLE: dict[str, tuple[type, float | None, float | None]] = {
     "trigger.keyword_prob": (float, 0.0, 1.0),
     "trigger.random_n": (int, 2, 10_000),
     "trigger.cooldown_s": (int, 0, 86_400),
-    "trigger.reaction_n": (int, 0, 10_000),
+    "trigger.reaction_n": (int, 1, 10_000),  # 1 in N: 0 would mean "react to everything"
     "trigger.tyla_default_min": (int, 0, 10_080),
-    "trigger.user_calls_per_min": (int, 0, 1_000),
+    "trigger.user_calls_per_min": (int, 1, 1_000),  # 0 would ignore every mention
     "trigger.burst_quiet_s": (float, 0.1, 600.0),
     "trigger.burst_max_s": (float, 0.1, 3_600.0),
 }
@@ -79,13 +79,13 @@ def _check(key: str, value: object) -> object:
 
 @router.get("/api/config")
 async def get_config(request: Request) -> dict:
-    doc = tomlkit.parse(request.app.state.deps.config_path.read_text(encoding="utf-8"))
+    """Current values. Keys an older config.toml lacks are filled with the defaults the bot uses."""
+    cfg = request.app.state.deps.cfg
     values = {}
     for key in EDITABLE:
         section, name = key.split(".")
-        if section in doc and name in doc[section]:
-            v = doc[section][name]
-            values[key] = list(v) if isinstance(v, list) else v.unwrap() if hasattr(v, "unwrap") else v
+        v = getattr(getattr(cfg, section), name)
+        values[key] = list(v) if isinstance(v, tuple) else v
     return {"values": values, "restart_required": True}
 
 

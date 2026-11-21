@@ -98,7 +98,12 @@ async def live_events(store: Store, status: Callable[[], Awaitable[dict]], *, po
     """Status first, then every trace as it finishes, and status again every status_every_s.
     Traces can finish out of order (a reply during a learning run), so the cursor only moves past
     traces that are finished or stuck."""
-    floor = store.conn.execute("SELECT COALESCE(MAX(id), 0) FROM traces").fetchone()[0]
+    # start after the newest finished trace, but before any that are still running (they are emitted when done)
+    floor = store.conn.execute("SELECT COALESCE(MAX(id), 0) FROM traces WHERE outcome IS NOT NULL").fetchone()[0]
+    running = store.conn.execute("SELECT MIN(id) FROM traces WHERE outcome IS NULL AND started >= ?",
+                                 (clock() - STUCK_S,)).fetchone()[0]
+    if running is not None:
+        floor = min(floor, running - 1)
     emitted: set[int] = set()
     yield _event("status", await status())
     sent_status = time.monotonic()

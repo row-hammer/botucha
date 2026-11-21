@@ -366,7 +366,7 @@ class Botucha:
         texts = result.texts
         if texts is None:
             self.last_error = self.last_error or "model returned nothing"
-            run.finish("canned" if direct else "skipped", error=self.last_error)
+            run.finish("canned" if direct else "skipped", error="no usable reply: every attempt failed or was rejected")
             if direct:
                 await self._send(chat_id, [CANNED], direct[-1].msg_id, store=False)
             return
@@ -375,6 +375,12 @@ class Botucha:
         with run.step("send") as st:
             sent = await self._send(chat_id, texts, direct[-1].msg_id if direct else None, store=True)
             st.detail["msg_ids"] = sent
+            if len(sent) < len(texts):  # _send logs and stops at the first Telegram error
+                st.status = "error"
+                st.detail["error"] = self.last_error
+        if not sent:
+            run.finish("error", reply="\n".join(texts), error=self.last_error)
+            return
         run.finish("fallback" if result.fallback else "sent", reply="\n".join(texts),
                    sent=[(chat_id, mid) for mid in sent])
 

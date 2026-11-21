@@ -54,8 +54,8 @@ export function FactDialog({
   }, [open, fact, form]);
   const submit = form.handleSubmit(async ({ text }) => {
     try {
-      if (fact) await post(`/api/facts/${fact.id}`, { text }, "PUT");
-      else await post("/api/facts", { kind, text });
+      if (fact) await post(`/api/facts/${fact.id}`, { text }, "PUT", { inline: [422] });
+      else await post("/api/facts", { kind, text }, "POST", { inline: [422] });
       toast.success(t("common.saved"));
       onSaved();
       onClose();

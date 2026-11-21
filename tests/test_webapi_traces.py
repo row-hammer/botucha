@@ -122,3 +122,17 @@ async def test_live_keeps_up_after_many_traces_and_a_stuck_one(web):
     nxt = json.loads((await asyncio.wait_for(anext(events), 2)).split("data: ", 1)[1])["id"]
     assert len(set(got)) == 250 and nxt == tid
     await events.aclose()
+
+
+async def test_live_emits_a_trace_that_was_running_when_connected(web):
+    _, deps, _ = await web()
+
+    async def status():
+        return {}
+    run = Tracer(deps.store, clock=lambda: 9_990.0).start("reply")  # running when the page connects
+    events = live_events(deps.store, status, poll_s=0.01, status_every_s=1000, clock=lambda: 10_000.0)
+    await anext(events)
+    run.finish("sent", reply="x")
+    ev = await asyncio.wait_for(anext(events), 2)
+    assert json.loads(ev.split("data: ", 1)[1])["id"] == run.id
+    await events.aclose()

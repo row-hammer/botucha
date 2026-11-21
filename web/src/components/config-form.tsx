@@ -19,9 +19,9 @@ const NUMBERS: [string, number, number, boolean][] = [
   ["trigger.keyword_prob", 0, 1, false],
   ["trigger.random_n", 2, 10_000, true],
   ["trigger.cooldown_s", 0, 86_400, true],
-  ["trigger.reaction_n", 0, 10_000, true],
+  ["trigger.reaction_n", 1, 10_000, true],
   ["trigger.tyla_default_min", 0, 10_080, true],
-  ["trigger.user_calls_per_min", 0, 1_000, true],
+  ["trigger.user_calls_per_min", 1, 1_000, true],
   ["trigger.burst_quiet_s", 0.1, 600, false],
   ["trigger.burst_max_s", 0.1, 3_600, false],
 ];
@@ -30,9 +30,10 @@ const field = (k: string) => k.replace(".", "_");
 const schema = z.object({
   ...Object.fromEntries(
     NUMBERS.map(([k, lo, hi, int]) => {
-      let n = z.coerce.number().min(lo).max(hi);
+      let n = z.number().min(lo).max(hi);
       if (int) n = n.int();
-      return [field(k), n];
+      // an empty field is an error, not 0 (0 calls per minute would silence the bot)
+      return [field(k), z.preprocess((v) => (v === "" || v == null ? undefined : Number(v)), n)];
     }),
   ),
   trigger_keywords: z.string().trim().min(1),
@@ -60,13 +61,15 @@ export function ConfigForm() {
       .map((s) => s.trim())
       .filter(Boolean);
     try {
-      await post("/api/config", { values }, "PUT");
+      await post("/api/config", { values }, "PUT", { inline: [422] });
       setError("");
       toast.success(t("common.saved"), {
         action: {
           label: t("settings.restartNow"),
           onClick: () =>
-            post("/api/control/service", { action: "restart" }).then(() => toast.success(t("controls.done"))),
+            post("/api/control/service", { action: "restart" })
+              .then(() => toast.success(t("controls.done")))
+              .catch(() => {}),
         },
         duration: 15_000,
       });

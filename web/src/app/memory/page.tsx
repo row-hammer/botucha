@@ -58,8 +58,12 @@ export default function MemoryPage() {
 
   const remove = useCallback(
     async (f: Fact) => {
-      await api(`/api/facts/${f.id}`, { method: "DELETE" });
-      toast.success(t("common.deleted"));
+      try {
+        await api(`/api/facts/${f.id}`, { method: "DELETE" });
+        toast.success(t("common.deleted"));
+      } catch {
+        /* api() already showed the error */
+      }
       load();
     },
     [load, t],

@@ -58,7 +58,7 @@ export function PersonaEditor() {
 
   const save = async () => {
     try {
-      await post("/api/persona", { text }, "PUT");
+      await post("/api/persona", { text }, "PUT", { inline: [422] });
       setSaved(text);
       setReview(false);
       setError("");

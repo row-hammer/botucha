@@ -167,3 +167,25 @@ async def test_filter_step_is_timed(tbot):
     [(tid, *_)] = traces(store)
     ms = store.conn.execute("SELECT duration_ms FROM trace_steps WHERE trace_id=? AND kind='filter'", (tid,)).fetchone()[0]
     assert ms >= 15
+
+
+async def test_failed_send_is_not_recorded_as_sent(tbot):
+    bot, store, out = await tbot(["labas"])
+
+    async def down(chat_id, texts, reply_to):
+        raise RuntimeError("telegram down")
+    out.send = down
+    await bot.on_message(inc("botucha?"))
+    await settle()
+    [(tid, _, _, outcome, _, error)] = traces(store)
+    assert outcome == "error" and "telegram down" in error
+    assert store.conn.execute("SELECT status FROM trace_steps WHERE trace_id=? AND kind='send'", (tid,)).fetchone()[0] == "error"
+
+
+async def test_canned_trace_does_not_show_an_old_error(tbot):
+    bot, store, out = await tbot(["", ""])
+    bot.last_error = "send: yesterday's timeout"
+    await bot.on_message(inc("botucha?"))
+    await settle()
+    [(_, _, _, outcome, _, error)] = traces(store)
+    assert outcome == "canned" and "yesterday" not in error

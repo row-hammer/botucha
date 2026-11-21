@@ -116,3 +116,18 @@ async def test_config_get_and_save_keeps_comments(web):
     assert cfg.model.temperature == 0.5 and cfg.trigger.keywords == ("spx", "btc")
     assert [b.name.startswith("config-") for b in deps.backups_dir.iterdir()] == [True]
     assert mode(deps.config_path) == 0o600
+
+
+async def test_config_rejects_zero_that_would_silence_the_bot(web):
+    client, deps, _ = await web()
+    for key in ("trigger.user_calls_per_min", "trigger.reaction_n"):
+        assert (await client.put("/api/config", json={"values": {key: 0}})).status_code == 422
+
+
+async def test_config_get_fills_keys_missing_from_old_files(web):
+    client, deps, _ = await web()
+    text = deps.config_path.read_text()
+    deps.config_path.write_text("\n".join(l for l in text.splitlines() if not l.startswith(("temperature", "user_calls_per_min"))))
+    values = (await client.get("/api/config")).json()["values"]
+    assert values["model.temperature"] == deps.cfg.model.temperature
+    assert values["trigger.user_calls_per_min"] == deps.cfg.trigger.user_calls_per_min

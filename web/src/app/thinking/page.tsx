@@ -50,7 +50,9 @@ function TraceList() {
     () =>
       onTrace((tr) => {
         if ((kind === "all" || tr.kind === kind) && (outcome === "all" || tr.outcome === outcome))
-          setRows((cur) => (cur && !cur.some((r) => r.id === tr.id) ? [tr, ...cur] : cur));
+          setRows((cur) =>
+            cur ? (cur.some((r) => r.id === tr.id) ? cur.map((r) => (r.id === tr.id ? tr : r)) : [tr, ...cur]) : cur,
+          );
       }),
     [kind, outcome],
   );
