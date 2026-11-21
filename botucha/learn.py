@@ -100,7 +100,10 @@ async def learn_once(memory: Memory, llm: LLM, chat_id: int, *, source: str = "a
         if uid in locked:
             facts_rejected.append({"text": fact[:200], "reason": "locked"})
             continue  # owner keeps this member's memory by hand
-        await memory.upsert_fact("fact", fact, uid, source)
+        _, outcome = await memory.upsert_fact_ex("fact", fact, uid, source)
+        if outcome == "kept":
+            facts_rejected.append({"text": fact[:200], "reason": "curated"})  # a person already wrote this one
+            continue
         facts_added.append(fact)
         n += 1
     run.add_step("facts", detail={"added": facts_added, "rejected": facts_rejected})
@@ -112,7 +115,10 @@ async def learn_once(memory: Memory, llm: LLM, chat_id: int, *, source: str = "a
             slang_rejected.append({"text": entry[:200], "reason": "too_long" if len(word) + len(meaning) >
                                    MAX_SLANG_CHARS else "instruction"})
             continue
-        await memory.upsert_fact("slang", entry, None, source)
+        _, outcome = await memory.upsert_fact_ex("slang", entry, None, source)
+        if outcome == "kept":
+            slang_rejected.append({"text": entry[:200], "reason": "curated"})
+            continue
         slang_added.append(entry)
         n += 1
     run.add_step("slang", detail={"added": slang_added, "rejected": slang_rejected})

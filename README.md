@@ -296,7 +296,8 @@ retrieves more chunks.
 When the chat has been quiet for 10 minutes and at least 30 new messages exist, the model reads the new
 chunks and returns JSON with facts (about named people) and slang. Rules:
 - his own lines are removed before learning, so his jokes never become "facts";
-- a near-duplicate fact (cosine ≥ 0.88) updates the existing one instead of adding a new one;
+- a near-duplicate fact (cosine ≥ 0.88) updates the existing one instead of adding a new one, unless a person
+  wrote the existing one (`/isimink`, `/slengas`, the dashboard): those are never changed by learning;
 - facts that look like instructions or are too long are dropped;
 - facts about a known person always carry that person's name, so they link correctly;
 - members listed in `memory.locked_members` get no automatic facts and no profile refresh;

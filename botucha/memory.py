@@ -153,10 +153,11 @@ class Memory:
         self.db.commit()
         return cur.lastrowid
 
-    def _set_fact_text(self, fact_id: int, old: str, text: str, emb) -> None:
+    def _set_fact_text(self, fact_id: int, old: str, text: str, emb, about: int | None = None) -> None:
+        """New text for a fact. about, when given, also moves who the fact is about."""
         self.db.execute("INSERT INTO facts_fts (facts_fts, rowid, text) VALUES ('delete', ?, ?)", (fact_id, old))
-        self.db.execute("UPDATE facts SET text=?, emb=?, updated=? WHERE id=?",
-                        (text, _blob(emb), self.clock(), fact_id))
+        self.db.execute("UPDATE facts SET text=?, emb=?, updated=?, about=COALESCE(?, about) WHERE id=?",
+                        (text, _blob(emb), self.clock(), about, fact_id))
         self.db.execute("INSERT INTO facts_fts (rowid, text) VALUES (?,?)", (fact_id, text))
         r = self.db.execute("SELECT kind, about FROM facts WHERE id=?", (fact_id,)).fetchone()
         if r and r[0] == "fact":
@@ -164,13 +165,23 @@ class Memory:
         self.db.commit()
 
     async def upsert_fact(self, kind: FactKind, text: str, about: int | None, source: str) -> tuple[int, bool]:
+        """(fact id, whether a new fact was added)."""
+        fid, outcome = await self.upsert_fact_ex(kind, text, about, source)
+        return fid, outcome == "added"
+
+    async def upsert_fact_ex(self, kind: FactKind, text: str, about: int | None,
+                             source: str) -> tuple[int, Literal["added", "updated", "kept"]]:
+        """Add a fact, or update the near-duplicate it repeats. A fact a person wrote (a chat command or the
+        dashboard) is never changed by an automatic one: it is "kept" as it is and nothing is added."""
         emb = (await self.embedder.embed([text]))[0]
-        rows = self.db.execute("SELECT id, text, emb FROM facts WHERE kind=?", (kind,)).fetchall()
+        rows = self.db.execute("SELECT id, text, emb, source FROM facts WHERE kind=?", (kind,)).fetchall()
         best = max(rows, key=lambda r: float(_vec(r[2]) @ emb), default=None)
         if best is not None and float(_vec(best[2]) @ emb) >= DEDUPE_COS:
-            self._set_fact_text(best[0], best[1], text, emb)
-            return best[0], False
-        return self._insert_fact(kind, text, about, source, emb), True
+            if source == "auto" and best[3] != "auto":
+                return best[0], "kept"
+            self._set_fact_text(best[0], best[1], text, emb, about)
+            return best[0], "updated"
+        return self._insert_fact(kind, text, about, source, emb), "added"
 
     async def update_fact(self, fact_id: int, text: str) -> bool:
         r = self.db.execute("SELECT text FROM facts WHERE id=?", (fact_id,)).fetchone()

@@ -107,3 +107,16 @@ def test_config_locked_members(tmp_path):
     p = tmp_path / "c.toml"
     p.write_text(ex.read_text() + "\n[memory]\nlocked_members = [111]\n")
     assert load_config(p, {"BOTUCHA_TOKEN": "t"}).memory.locked_members == (111,)
+
+
+async def test_learning_leaves_a_member_taught_fact_alone_and_says_so():
+    from botucha.trace import Tracer
+    s, mem = setup()
+    await mem.index_new_chunks(C)
+    fid = await mem.add_fact("fact", "tadas shortina vwce su 3x svertu kasdien", 111, "cmd:111")
+    raw = json.dumps({"facts": [{"about": "tada", "text": "tadas shortina vwce su 3x svertu kasdien ryte"}], "slang": []})
+    run = Tracer(s).start("learn", chat_id=C)
+    assert await learn_once(mem, FakeLLM([raw]), C, run=run) == 0
+    assert [f.text for f in mem.all_facts()] == ["tadas shortina vwce su 3x svertu kasdien"]
+    detail = json.loads(s.conn.execute("SELECT detail FROM trace_steps WHERE kind='facts'").fetchone()[0])
+    assert detail["added"] == [] and [r["reason"] for r in detail["rejected"]] == ["curated"]
