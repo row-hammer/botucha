@@ -269,7 +269,8 @@
     "errors": {
       "name": "Vardas tuščias",
       "rel": "1–60 simbolių"
-    }
+    },
+    "arrange": "Išdėstyti automatiškai"
   },
   "ratings": {
     "cols": {

@@ -10,17 +10,21 @@ import {
   MarkerType,
   type Node,
   type NodeProps,
+  Panel,
   Position,
   ReactFlow,
   useNodesState,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { useEffect, useMemo } from "react";
+import { LayoutGrid } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { useT } from "@/lib/i18n";
+import { layoutPeople, NODE_H, NODE_W } from "@/lib/people-layout";
 import type { PeopleGraph, Person } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-const POS_KEY = "botucha.people.pos";
+const POS_KEY = "botucha.people.pos.v2"; // v2: positions from the old circle layout are dropped once
 const SIDES = [
   ["t", Position.Top],
   ["r", Position.Right],
@@ -34,6 +38,14 @@ function loadPos(): Record<string, XY> {
     return JSON.parse(localStorage.getItem(POS_KEY) ?? "{}");
   } catch {
     return {};
+  }
+}
+
+function clearPos() {
+  try {
+    localStorage.removeItem(POS_KEY);
+  } catch {
+    /* private window */
   }
 }
 
@@ -59,8 +71,9 @@ function PersonNode({ data, selected }: NodeProps) {
   const p = (data as { person: Person }).person;
   return (
     <div
+      style={{ width: NODE_W, height: NODE_H }}
       className={cn(
-        "min-w-[120px] rounded-xl border-2 bg-card px-3 py-2 text-center text-card-foreground shadow-sm",
+        "flex flex-col justify-center border-2 bg-card px-3 text-center text-card-foreground shadow-sm",
         p.user_id ? "border-chart-1/60" : "border-chart-5/60",
         selected && "ring-2 ring-ring",
       )}
@@ -74,8 +87,8 @@ function PersonNode({ data, selected }: NodeProps) {
           className="!size-2 !border-0 !bg-transparent"
         />
       ))}
-      <div className="font-medium text-sm">{p.name}</div>
-      <div className="text-xs text-muted-foreground">
+      <div className="truncate font-medium text-sm">{p.name}</div>
+      <div className="truncate text-muted-foreground text-xs">
         {p.user_id ? t("people.member") : t("people.friend")} · {p.fact_count} {t("people.facts").toLowerCase()}
       </div>
       {SIDES.map(([side, pos]) => (
@@ -104,17 +117,18 @@ export function PeopleGraphView({
   onSelect: (p: Person) => void;
   onConnect: (a: number, b: number) => void;
 }) {
+  const t = useT();
+  const [arranged, setArranged] = useState(0); // bumped by "Auto-arrange": forget dragged positions, refit
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `arranged` re-runs the layout on purpose
   const initial = useMemo<Node[]>(() => {
-    const saved = loadPos();
-    const n = graph.people.length || 1;
-    const r = Math.max(300, n * 45);
-    return graph.people.map((p, i) => ({
+    const pos = layoutPeople(graph, loadPos());
+    return graph.people.map((p) => ({
       id: String(p.id),
       type: "person",
-      position: saved[p.id] ?? { x: r * Math.cos((2 * Math.PI * i) / n), y: r * Math.sin((2 * Math.PI * i) / n) },
+      position: pos[p.id] ?? { x: 0, y: 0 },
       data: { person: p },
     }));
-  }, [graph.people]);
+  }, [graph, arranged]);
   const [nodes, setNodes, onNodesChange] = useNodesState(initial);
   useEffect(() => setNodes(initial), [initial, setNodes]);
 
@@ -142,14 +156,15 @@ export function PeopleGraphView({
         style: { stroke: "var(--chart-1)", strokeWidth: 2 },
         labelStyle: { fontSize: 12, fontWeight: 500 },
         labelBgPadding: [6, 3] as [number, number],
-        labelBgBorderRadius: 6,
+        labelBgBorderRadius: 0,
       })),
     ];
   }, [graph, nodes]);
 
   return (
-    <div className="h-[calc(100svh-9rem)] min-h-[420px] rounded-lg border bg-muted/20">
+    <div className="h-[calc(100svh-9rem)] min-h-[420px] border bg-muted/20">
       <ReactFlow
+        key={arranged}
         nodes={nodes.map((n) => ({ ...n, selected: n.id === String(selected) }))}
         edges={edges}
         nodeTypes={nodeTypes}
@@ -163,6 +178,20 @@ export function PeopleGraphView({
       >
         <Background gap={24} size={1} color="var(--border)" />
         <Controls showInteractive={false} />
+        <Panel position="top-right">
+          <Button
+            size="sm"
+            variant="outline"
+            className="bg-card"
+            onClick={() => {
+              clearPos();
+              setArranged((n) => n + 1);
+            }}
+          >
+            <LayoutGrid />
+            {t("people.arrange")}
+          </Button>
+        </Panel>
       </ReactFlow>
     </div>
   );

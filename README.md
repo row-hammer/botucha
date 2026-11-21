@@ -201,14 +201,18 @@ pataisyk - (reply) geresnis atsakymas
 
 A local website for running Botucha, at **http://127.0.0.1:8765**. It is a separate service, so it keeps
 working when the bot is stopped or crashed (you can see why and start it again). English by default,
-Lithuanian with one click (bottom of the sidebar), light and dark theme.
+Lithuanian with one click (bottom of the sidebar), light and dark theme. Range and filters are kept in the
+URL, so a reload or a shared link shows the same view; failed loads retry and then show an error with a
+Retry button.
 
 | Page | What it shows / does |
 |---|---|
-| Overview | bot status, last error; replies, median reply time, tok/s, filter rejections, ratings; charts for 24 h / 7 d / 30 d |
+| Overview | bot status, last error; replies, median reply time, tok/s, first-try pass and fallback rates, ratings; charts for 24 h / 7 d / 30 d |
+| Pipeline | how replies flow through generation, the filters and Claude (Sankey; click any box to see those replies), where the time goes per stage, and what he is doing right now |
+| Quality | words the spell check flags (with Claude's verdict and an "add to known words" button), Claude proofreading status and switch, context window use, attempts, triggers, per-person table, when the group is active |
 | Thinking | every reply and learning run, live; open one to see its step graph and timeline (below) |
 | Memory | facts and slang: search, filter by person or source, add, edit, delete |
-| People | graph of people: explicit relations (arrows with labels) and people mentioned together (dashed); drag from one person to another to add a relation |
+| People | graph of people, laid out automatically: explicit relations (arrows with labels) and people mentioned together (dashed); drag from one person to another to add a relation, "Auto-arrange" to tidy up |
 | Ratings | 👍/👎 and corrections next to his original message and a link to its trace; mark as reviewed; export JSONL for fine-tuning |
 | Controls | on/off, uninvited reply frequency, quiet mode, start/stop/restart the bot, recent log |
 | Persona & Settings | edit `persona.md` with a diff before saving; edit selected `config.toml` values (backed up, comments kept) |
@@ -463,9 +467,15 @@ is make him say something odd. On top of that:
 ## Development
 
 ```bash
-uv run pytest            # ~250 tests, no Telegram, Ollama or GPU needed
-cd web && npm run check && npm run test:i18n && npm run test:unit   # UI lint, EN/LT keys, graph layout
+uv run pytest            # ~340 tests, no Telegram, Ollama, GPU or API key needed
+cd web && npm run check && npm run test:i18n && npm run test:unit   # UI lint, EN/LT keys, layouts
+cd web && npm run build:static && npm run test:e2e                  # Playwright, see below
 ```
+
+`npm run test:e2e` starts `web/e2e/server.py` (the real API and built UI over a throwaway database of
+invented data, with a fake systemd) and runs Playwright with the system Chromium (`CHROMIUM_PATH` to point
+elsewhere). Every page is opened in light/dark, EN/LT, desktop/phone and fails on console errors, failed API
+calls, horizontal scroll or untranslated keys; the interaction tests click through every page's controls.
 
 Telegram and Ollama sit behind small protocols (`Outbox`, `LLM`, `Embedder`), so the whole flow is tested
 with fakes (`tests/fakes.py`). The suite covers:

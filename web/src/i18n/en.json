@@ -269,7 +269,8 @@
     "errors": {
       "name": "Name is empty",
       "rel": "1–60 characters"
-    }
+    },
+    "arrange": "Auto-arrange"
   },
   "ratings": {
     "cols": {

@@ -111,6 +111,9 @@ test.describe("desktop", () => {
     await page.locator(".react-flow__node").filter({ hasText: "Tadas" }).click();
     await expect(page.getByRole("dialog")).toContainText("Tadas dirba banke");
     await page.keyboard.press("Escape");
+    await page.getByRole("button", { name: "Auto-arrange" }).click();
+    await expect(page.locator(".react-flow__node")).toHaveCount(3);
+    await expect(page.locator(".react-flow__edge-text").filter({ hasText: "draugas" })).toBeVisible();
   });
 
   test("ratings list the seeded rating and link its trace", async ({ page }) => {
