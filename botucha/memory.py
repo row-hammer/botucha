@@ -289,6 +289,26 @@ class Memory:
             self._link(fid, text, about)
         self.db.commit()
 
+    def get_person(self, person_id: int) -> Person | None:
+        rows = self._people_rows("WHERE id=?", (person_id,))
+        return rows[0] if rows else None
+
+    def set_aliases(self, person_id: int, aliases: list[str]) -> bool:
+        """Replace a person's word forms and relink every fact."""
+        if self.get_person(person_id) is None:
+            return False
+        clean = list(dict.fromkeys(a.strip().lower() for a in aliases if a.strip()))
+        self.db.execute("UPDATE people SET aliases=? WHERE id=?", (",".join(clean), person_id))
+        self.relink_all()
+        return True
+
+    def comentions(self) -> list[tuple[int, int, int]]:
+        """(a, b, shared facts) for every pair of people mentioned in the same fact, a < b."""
+        return [tuple(r) for r in self.db.execute(
+            "SELECT a.person_id, b.person_id, COUNT(*) FROM fact_people a JOIN fact_people b "
+            "ON a.fact_id=b.fact_id AND a.person_id < b.person_id GROUP BY a.person_id, b.person_id "
+            "ORDER BY a.person_id, b.person_id")]
+
     def people_of_fact(self, fact_id: int) -> list[Person]:
         return self._people_rows("WHERE id IN (SELECT person_id FROM fact_people WHERE fact_id=?)", (fact_id,))
 

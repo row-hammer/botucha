@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -55,6 +57,16 @@ def create_app(deps: Deps, *, token: str | None = None, dev: bool = False) -> Fa
         if "locked" in str(e) or "busy" in str(e):
             return JSONResponse({"error": "busy"}, status_code=503)
         return JSONResponse({"error": "database error"}, status_code=500)
+
+    @app.exception_handler(RequestValidationError)
+    async def invalid(_: Request, e: RequestValidationError):
+        first = e.errors()[0] if e.errors() else {}
+        where = ".".join(str(x) for x in first.get("loc", ())[1:])
+        return JSONResponse({"error": f"{where}: {first.get('msg', 'invalid')}".strip(": ")}, status_code=422)
+
+    @app.exception_handler(StarletteHTTPException)
+    async def http_error(_: Request, e: StarletteHTTPException):
+        return JSONResponse({"error": str(e.detail)}, status_code=e.status_code)
 
     from . import routes_status
     app.include_router(routes_status.router)
