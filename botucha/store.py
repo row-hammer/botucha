@@ -211,6 +211,28 @@ class Store:
             "JOIN messages m ON m.chat_id=c.chat_id AND m.msg_id=c.msg_id ORDER BY c.ts DESC LIMIT ?", (n,)).fetchall()
         return [Correction(*r) for r in rows]
 
+    def ratings(self, limit: int = 200) -> list[dict]:
+        """Votes and corrections on Botucha's messages, newest first, with the original text."""
+        q = self.conn.execute
+        fb = q("SELECT 'feedback', f.chat_id, f.msg_id, f.user_id, mb.name, f.score, f.reason, NULL, f.ts, f.reviewed, m.text "
+               "FROM feedback f LEFT JOIN messages m ON m.chat_id=f.chat_id AND m.msg_id=f.msg_id "
+               "LEFT JOIN members mb ON mb.user_id=f.user_id ORDER BY f.ts DESC LIMIT ?", (limit,)).fetchall()
+        co = q("SELECT 'correction', c.chat_id, c.msg_id, c.user_id, mb.name, NULL, NULL, c.text, c.ts, c.reviewed, m.text "
+               "FROM corrections c LEFT JOIN messages m ON m.chat_id=c.chat_id AND m.msg_id=c.msg_id "
+               "LEFT JOIN members mb ON mb.user_id=c.user_id ORDER BY c.ts DESC LIMIT ?", (limit,)).fetchall()
+        keys = ("kind", "chat_id", "msg_id", "user_id", "user_name", "score", "reason", "text", "ts", "reviewed", "original")
+        rows = [dict(zip(keys, r)) for r in fb + co]
+        for r in rows:
+            r["reviewed"] = bool(r["reviewed"])
+        return sorted(rows, key=lambda r: -r["ts"])[:limit]
+
+    def set_reviewed(self, kind: str, chat_id: int, msg_id: int, user_id: int, reviewed: bool) -> bool:
+        table = {"feedback": "feedback", "correction": "corrections"}[kind]
+        n = self.conn.execute(f"UPDATE {table} SET reviewed=? WHERE chat_id=? AND msg_id=? AND user_id=?",
+                              (int(reviewed), chat_id, msg_id, user_id)).rowcount
+        self.conn.commit()
+        return n > 0
+
     def get_state(self, key: str, default: str | None = None) -> str | None:
         r = self.conn.execute("SELECT value FROM state WHERE key=?", (key,)).fetchone()
         return r[0] if r else default
