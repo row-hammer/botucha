@@ -1,0 +1,14 @@
+[Unit]
+Description=Botucha local web dashboard (127.0.0.1:8765)
+After=network-online.target botucha.service
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Projects/botucha
+ExecStart=%h/.local/share/mise/installs/uv/latest/.mise-bins/uv run python -m botucha.webapi --config config.toml
+Restart=on-failure
+RestartSec=5
+UMask=0077
+
+[Install]
+WantedBy=default.target

@@ -27,6 +27,7 @@ group message ─► Telegram ─► Botucha (Python, aiogram)
 - [Setup](#setup)
 - [Running](#running)
 - [Commands](#commands)
+- [Web dashboard](#web-dashboard)
 - [How it works](#how-it-works)
 - [Configuration reference](#configuration-reference)
 - [Making the persona yours](#making-the-persona-yours)
@@ -63,6 +64,8 @@ group message ─► Telegram ─► Botucha (Python, aiogram)
 - **Hardened against the chat.** Memory is passed to the model as data, instruction-like facts are refused,
   persona leaks are blocked, per-user rate limit, unknown groups are left automatically, no tools at all.
 - **Runs as a user service** that starts at boot and restarts on crashes.
+- **Local web dashboard.** Performance charts, a step-by-step "thinking" graph of every reply, memory and
+  people editing, ratings review, bot controls, persona and settings — in English or Lithuanian.
 
 ## Requirements
 
@@ -191,6 +194,58 @@ gerai - (reply) geras atsakymas
 blogai - (reply) blogas atsakymas
 pataisyk - (reply) geresnis atsakymas
 ```
+
+## Web dashboard
+
+A local website for running Botucha, at **http://127.0.0.1:8765**. It is a separate service, so it keeps
+working when the bot is stopped or crashed (you can see why and start it again). English by default,
+Lithuanian with one click (bottom of the sidebar), light and dark theme.
+
+| Page | What it shows / does |
+|---|---|
+| Overview | bot status, last error; replies, median reply time, tok/s, filter rejections, ratings; charts for 24 h / 7 d / 30 d |
+| Thinking | every reply and learning run, live; open one to see its step graph and timeline (below) |
+| Memory | facts and slang: search, filter by person or source, add, edit, delete |
+| People | graph of people: explicit relations (arrows with labels) and people mentioned together (dashed); drag from one person to another to add a relation |
+| Ratings | 👍/👎 and corrections next to his original message and a link to its trace; mark as reviewed; export JSONL for fine-tuning |
+| Controls | on/off, uninvited reply frequency, quiet mode, start/stop/restart the bot, recent log |
+| Persona & Settings | edit `persona.md` with a diff before saving; edit selected `config.toml` values (backed up, comments kept) |
+
+**The thinking graph.** Every reply leaves a trace of its steps:
+
+```
+context ─► memory search ─► prompt ─► generation #1 ─► filters #1 ─┬─► send
+ history    facts + chats    size per   tokens, tok/s    leak, repeat,  │
+            with scores      section    raw model text   script, spell  │
+                                       generation #2 ◄── rejected ──────┘
+```
+
+Click a step to see the details: which facts and old conversations were used (cosine score, word match),
+the prompt size per section and the full prompt, the raw model text before cleanup, and which filter rejected
+an attempt and why. The timeline shows where the time went (almost always generation). Learning runs show
+which facts and slang were added and which were refused (instruction-like, too long, locked member).
+Tracing never blocks a reply. Traces are kept for 30 days, full prompts for 7.
+
+**Build and run.** Node is only needed to build the UI; it runs on Python.
+
+```bash
+cd web && npm ci && npm run build:static && cd ..      # builds web/out
+uv run python -m botucha.webapi --config config.toml   # or the user service below
+ln -sf "$PWD/deploy/botucha-web.service" ~/.config/systemd/user/botucha-web.service
+systemctl --user daemon-reload && systemctl --user enable --now botucha-web
+```
+
+For UI work, run the API as above with `BOTUCHA_WEB_DEV=1` and `cd web && npm run dev` (port 3000,
+`/api` is proxied).
+
+**How changes reach the bot.** Both services share `botucha.db`. Memory edits apply to the next reply. On/off,
+frequency and quiet mode go through the `state` table, which the bot reads every 5 seconds. A persona change
+applies to the next reply. Config changes need a restart (the page offers one).
+
+**Security.** It listens on `127.0.0.1` only and has no login. Requests with any other `Host` header are
+refused (DNS rebinding), and every change needs a per-start token that other websites cannot read (CSRF).
+`.env` is never shown or edited. Memory edits go through the same instruction filter and limits as chat
+commands. Written files and backups (`backups/persona-*.md`, `backups/config-*.toml`) are private (600).
 
 ## How it works
 
@@ -356,12 +411,14 @@ is make him say something odd. On top of that:
 - `/isimink`, `/slengas` and learning refuse instruction-like or oversized entries;
 - persona leaks are detected and regenerated;
 - there is a per-user call limit;
-- FTS5 queries are built from quoted tokens, so user text cannot break SQL search syntax.
+- FTS5 queries are built from quoted tokens, so user text cannot break SQL search syntax;
+- the web dashboard listens on `127.0.0.1` only, checks the `Host` header and requires a token for changes.
 
 ## Development
 
 ```bash
-uv run pytest            # ~195 tests, no Telegram, Ollama or GPU needed
+uv run pytest            # ~250 tests, no Telegram, Ollama or GPU needed
+cd web && npm run check && npm run test:i18n && npm run test:unit   # UI lint, EN/LT keys, graph layout
 ```
 
 Telegram and Ollama sit behind small protocols (`Outbox`, `LLM`, `Embedder`), so the whole flow is tested
@@ -369,7 +426,8 @@ with fakes (`tests/fakes.py`). The suite covers:
 - triggers, burst handling and commands;
 - memory, learning, people and slang;
 - prices, feedback and the security guards;
-- reply quality filters and the aiogram adapter.
+- reply quality filters and the aiogram adapter;
+- tracing and the web API (security checks, memory, settings, backups).
 
 ## Project layout
 
@@ -393,11 +451,14 @@ botucha/
   embed.py, llm.py Ollama clients
   style.py         pick real group lines as style examples
   evaluation.py    persona / memory eval and offline bootstrap
+  trace.py         step traces of replies and learning runs
+  webapi/          local dashboard API (FastAPI): status, traces, metrics, memory, people, ratings, settings
 data/hunspell/     Lithuanian hunspell dictionary (LibreOffice, BSD licence, see COPYING)
-deploy/            systemd user unit
+deploy/            systemd user units (bot, web dashboard)
 eval/prompts.toml  eval prompts
 persona.example.md example persona (copy to persona.md)
 tests/             pytest suite
+web/               dashboard UI (Next.js static export, shadcn/ui, recharts, xyflow)
 ```
 
 ## Troubleshooting
@@ -411,6 +472,8 @@ tests/             pytest suite
 | First reply takes 20–30 s | The model is loading into VRAM; `keep_alive` keeps it loaded afterwards. |
 | He invents words | Lower `temperature`, teach the real words with `/slengas`, or try a higher-quality quant. |
 | He repeats a joke or a wrong idea | Delete or fix the fact that feeds it (`/ka_zinai`, `/pamirsk`, `/taisyk`). |
+| Dashboard says "UI not built" | Run `cd web && npm ci && npm run build:static`. |
+| Dashboard changes do nothing | The bot reads on/off and quiet mode every 5 s; config changes need a restart (Controls). |
 | `/kaina` says it cannot find a ticker | Yahoo symbol differs (e.g. `VWCE.DE`); add an alias under `[prices]`. |
 
 ## Roadmap
