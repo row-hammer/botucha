@@ -79,3 +79,22 @@ async def test_vocab_comes_from_members_not_bot(app):
     store.add_message(StoredMessage(C, 501, BOT_ID, "Botucha", 2.0, "varkotės", is_bot=True))
     vocab = bot.vocabulary()
     assert "kapazocha" in vocab and "varkotes" not in vocab
+
+
+async def test_commands_not_in_prompt_history(app):
+    bot, store, llm, out = await app(["jo"])
+    store.add_message(StoredMessage(C, 600, 111, "Tadas", 9000.0, "/pataisyk geriau taip"))
+    store.add_message(StoredMessage(C, 601, 111, "Tadas", 9001.0, "/gerai"))
+    store.add_message(StoredMessage(C, 602, 111, "Tadas", 9002.0, "vakar buvo smagu"))
+    await bot.on_message(inc("botucha ka manai", msg_id=603))
+    await settle()
+    user = llm.calls[0]["messages"][1]["content"]
+    assert "vakar buvo smagu" in user and "/pataisyk" not in user and "/gerai" not in user
+
+
+async def test_rimtai_question_stays_in_history(app):
+    bot, store, llm, out = await app(["atsakymas"])
+    await bot.on_message(inc("/rimtai kaip veikia etf", msg_id=610))
+    await settle()
+    user = llm.calls[0]["messages"][1]["content"]
+    assert "kaip veikia etf" in user

@@ -273,8 +273,10 @@ class Botucha:
         links = any(getattr(j, "links", False) for j in jobs)
         try:
             await self.memory.index_new_chunks(chat_id)
-            history = self._trim_own(self.store.recent_messages(chat_id, HISTORY_N))
             ids = {j.msg_id for j in jobs}
+            # commands are not conversation, except the /rimtai or /atsimeni being answered right now
+            history = self._trim_own([m for m in self.store.recent_messages(chat_id, HISTORY_N)
+                                      if not m.text.startswith("/") or m.msg_id in ids])
             query = "\n".join(m.text for m in history if m.msg_id in ids) or (history[-1].text if history else "")
             hits = await self.memory.search_chunks(query, k=6 if recall else 3, chat_id=chat_id)
             facts = await self.memory.search_facts(query, k=5)
