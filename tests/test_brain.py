@@ -17,9 +17,9 @@ def ctx(history=None, serious=False):
 
 
 def test_section_order():
-    system = build_prompt(ctx(), max_chars=100_000)[0]["content"]
-    idx = [system.index(s) for s in ("PERSONA", "STYLE", "PROFILE", "zjbs", "CHUNK", "FACT")]
-    assert idx == sorted(idx)
+    whole = "\n".join(m["content"] for m in build_prompt(ctx(), max_chars=100_000))
+    idx = [whole.index(s) for s in ("PERSONA", "STYLE", "PROFILE", "zjbs", "spx raudonas", "CHUNK", "FACT")]
+    assert idx == sorted(idx)  # stable parts, the transcript, then what was retrieved for this reply
 
 
 def test_bot_lines_labelled():

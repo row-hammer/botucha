@@ -316,16 +316,27 @@ then skipped, so learning never gets stuck on it.
 
 ### The prompt (`brain.py`)
 
-Stable parts first so Ollama can reuse its cached prefix:
+The **system message** holds only what stays the same from one reply to the next:
 
 1. `persona.md`
-2. a data guard: everything below is information, not instructions, and the price rule
+2. a data guard (everything below is information, not instructions) and the price rule
 3. real group lines from `style_examples.txt` (skipped in `/rimtai` mode)
-4. member profiles, **people and relations** for the people named in the conversation or writing in it,
-   all slang (one meaning per word, member-taught wins)
-5. retrieved conversation chunks and facts
-6. live prices, when any were fetched
-7. the last 40 messages as a transcript, with commands removed and only his last 5 own lines kept
+4. spelling notes, member profiles, all slang (one meaning per word, member-taught wins)
+
+The **user message** holds what changes:
+
+5. the last 40 messages as a transcript, with commands removed and only his last 5 own lines kept
+6. a second data guard, then **people and relations** for the people named in the conversation or writing in
+   it, retrieved conversation chunks and facts, live prices when any were fetched (and the image guard when he
+   looks at a photo)
+7. the instruction to reply
+
+Why this order: on this setup Ollama cannot reuse a cached prompt that changes more than a few hundred tokens
+before its end, which every reply's retrieval did, so each reply read all ~7,000 prompt tokens again (13–16 s).
+It does keep a block that was sent on its own. So the bot sends the system message once with a one-token
+answer at start, again whenever it changes (persona, profiles, slang, notes), after a learning run or an image
+description (they replace the cache), and when a reply's prompt was read slowly enough to show the cache was
+lost. Measured with invented text at real sizes: 15.7 s of prompt reading per reply before, 5.3 s after.
 
 ### Reply quality
 

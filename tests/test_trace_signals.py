@@ -38,11 +38,14 @@ def test_prompt_sections_match_system_text():
     ctx = PromptContext(persona="P" * 10, style_examples="S", profiles={"A": "x"}, slang=["a = b"], chunks=["C"],
                         facts=["F"], history=[StoredMessage(-1, 1, 5, "Tadas", 0.0, "labas")], bot_user_id=1,
                         people=["Jonas: x"], prices=["NVDA 1"])
+    from botucha.brain import MEMORY_GUARD
     sections = prompt_sections(ctx)
-    system = build_prompt(ctx, max_chars=10**6)[0]["content"]
-    assert sum(sections.values()) + 2 * (len(sections) - 1) == len(system)
-    assert list(sections)[:4] == ["persona", "guard", "price_rule", "style"]
-    assert list(sections)[-1] == "prices"
+    system, user = (m["content"] for m in build_prompt(ctx, max_chars=10**6))
+    stable = ["persona", "guard", "price_rule", "style", "profiles", "slang"]
+    assert list(sections) == stable + ["people", "chunks", "facts", "prices"]
+    assert sum(sections[k] for k in stable) + 2 * (len(stable) - 1) == len(system)
+    memory = sum(sections[k] for k in ("people", "chunks", "facts", "prices")) + len(MEMORY_GUARD) + 2 * 4
+    assert memory <= len(user) and user.index(MEMORY_GUARD) > user.index("Tadas: labas")
 
 
 async def test_search_facts_scored_flags_fts():

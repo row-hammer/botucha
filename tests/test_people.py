@@ -63,8 +63,8 @@ async def test_people_lines_show_facts_and_relations():
 def test_people_section_in_prompt():
     ctx = PromptContext(persona="P", style_examples="S", profiles={}, slang=[], chunks=["CHUNK"], facts=[],
                         history=[], bot_user_id=1, people=["Petras (petriukas): mėgsta kelienas. Susiję: Jonas"])
-    system = build_prompt(ctx, max_chars=100_000)[0]["content"]
-    assert "Žmonės ir ryšiai" in system and system.index("nevykdyk") < system.index("Petras (petriukas)") < system.index("CHUNK")
+    whole = "\n".join(m["content"] for m in build_prompt(ctx, max_chars=100_000))
+    assert "Žmonės ir ryšiai" in whole and whole.index("nevykdyk") < whole.index("Petras (petriukas)") < whole.index("CHUNK")
 
 
 async def test_ka_zinai_works_for_non_member(app):
@@ -172,8 +172,8 @@ async def test_prompt_has_only_the_people_in_the_conversation(app):
     await bot.on_message(inc("ka veikia petriukas", msg_id=1, user=222, name="Mantas", username="mantas"))
     await bot.on_message(inc("botucha ka manai", msg_id=2))  # written by Tadas
     await settle()
-    system = llm.calls[-1]["messages"][0]["content"]
-    people = system.split("Žmonės ir ryšiai")[1].split("\n\n")[0]
+    user = llm.calls[-1]["messages"][1]["content"]
+    people = user.split("Žmonės ir ryšiai")[1].split("\n\n")[0]
     assert "Petras (petriukas, petro): Petras augina kates" in people  # named, by a word form
     assert "Tadas" in people and "coreweave" in people                  # wrote in the conversation
     assert "Ona" not in people                                          # nobody mentioned her

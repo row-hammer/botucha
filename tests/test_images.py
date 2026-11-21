@@ -83,7 +83,8 @@ async def test_image_reaches_model_with_guard():
     llm = FakeLLM(["gražu"])
     res = await generate_reply_ex(llm, _ctx(b"IMG"), num_predict=50, max_chars=10_000, member_names=[], run=run)
     assert res.texts == ["gražu"] and llm.calls[0]["images"] == [b"IMG"]
-    assert IMAGE_GUARD in llm.calls[0]["messages"][0]["content"]
+    assert IMAGE_GUARD in llm.calls[0]["messages"][1]["content"]  # next to the image, in the user message
+    assert IMAGE_GUARD not in llm.calls[0]["messages"][0]["content"]  # the system message stays cacheable
     detail = store.conn.execute("SELECT detail FROM trace_steps WHERE kind='prompt'").fetchone()[0]
     assert '"image": {"bytes": 3}' in detail
 
@@ -302,3 +303,14 @@ async def test_bare_photo_does_not_search_memory_for_the_tag(app):
     await bot.on_message(inc("", mentions_bot=True, image_file_id="F1"))
     await settle()
     assert "nuotrauka su katinu" not in llm.calls[0]["messages"][0]["content"]
+
+
+async def test_the_cached_prompt_is_put_back_after_a_description(app):
+    """The description is a different prompt to the same model: it replaces the cached block."""
+    bot, store, llm, out = await vbot(app, ["", "gražus katinas", "Katinas su akiniais.", ""])
+    bot.warm_prompt_cache = True
+    await bot.on_message(inc("botucha žiūrėk", image_file_id="F1"))
+    await settle()
+    kinds = ["warm" if c["num_predict"] == 1 else "image" if c.get("images") else "text" for c in llm.calls]
+    assert kinds == ["warm", "image", "image", "warm"]  # warm, reply, describe, warm again
+    assert out.sent[-1][1] == "gražus katinas"

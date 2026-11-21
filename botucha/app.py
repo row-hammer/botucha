@@ -19,7 +19,7 @@ from .images import (DESCRIBE_NUM_PREDICT, DESCRIBE_PROMPT, DESCRIBE_TIMEOUT_S, 
                      IMAGE_WINDOW_S, MAX_IMAGE_BYTES, caption_of, clean_description, described_text,
                      description_of, image_text, retag)
 from .llm import chat_ex
-from .brain import PromptContext, generate_reply_ex
+from .brain import PromptContext, generate_reply_ex, stable_prompt
 from .commands import CommandContext, handle_command, load_trigger_state, message_link, parse_command
 from .config import Config
 from .export_import import import_export, parse_export
@@ -41,6 +41,8 @@ HISTORY_N = 40
 OWN_LINES_IN_HISTORY = 5  # fewer of his own lines = less copying himself
 RECENT_OWN_N = 20
 VISION_RECHECK_S = 300
+WARM_USER = "labas"
+CACHE_MISS_MS_PER_TOKEN = 1.2  # this PC reads ~2 ms/token from scratch and ~0.7 with the stable block cached
 BOT_NAME = "Botucha"
 COMMAND_FAILED = "nepavyko, pabandyk veliau"
 TG_LIMIT = 4000
@@ -116,6 +118,9 @@ class Botucha:
         self.aliases = {**DEFAULT_ALIASES, **dict(cfg.prices.aliases)}
         self._calls: dict[int, deque[float]] = defaultdict(deque)
         self._bg_lock = asyncio.Lock()  # bootstrap and learning never overlap
+        self.warm_prompt_cache = False  # set by __main__: keep the stable prompt in the model's cache
+        self._warmed: str | None = None  # the system message the model has cached, as far as we know
+        self._used_model = False  # set by a learning tick that called the model
         self.worker = ReplyWorker(self.run_job, quiet_s=cfg.trigger.burst_quiet_s,
                                   max_wait_s=cfg.trigger.burst_max_s)
 
@@ -342,6 +347,33 @@ class Botucha:
         words.update(known_words(self.store))  # approved on the dashboard (e.g. slang Claude judged real)
         return words
 
+    def _stable_context(self, *, serious: bool = False, **rest) -> PromptContext:
+        """Everything in the system message, read fresh: persona, style, notes, profiles, slang."""
+        members = self.store.members()
+        return PromptContext(
+            persona=_read(self.cfg.paths.persona), style_examples=_read(self.cfg.paths.style_examples),
+            profiles={members[u].name: p for u, p in self.memory.profiles().items() if u in members},
+            slang=self.memory.all_slang(), spelling_notes=spelling_notes(self.store), serious=serious,
+            **{"chunks": [], "facts": [], "history": [], "bot_user_id": self.bot_user_id, **rest})
+
+    async def warm_prompt(self, system: str | None = None) -> bool:
+        """Send the system message once on its own (a one-token answer), so the model keeps it cached and
+        a reply only reads what changed. Measured on this PC: ~15.7 s of prompt reading per reply before,
+        ~5.3 s after. True when sent; never raises."""
+        if not self.warm_prompt_cache:
+            return False
+        try:
+            system = system if system is not None else stable_prompt(self._stable_context())
+            if system == self._warmed:
+                return False
+            await chat_ex(self.llm, [{"role": "system", "content": system}, {"role": "user", "content": WARM_USER}],
+                          num_predict=1)
+        except Exception as e:
+            log.warning("prompt warm-up failed: %s", e)
+            return False
+        self._warmed = system
+        return True
+
     def _people_in_view(self, history: list[StoredMessage]) -> set[int]:
         """People this conversation is about: everyone named in it (any word form) and everyone who wrote in it.
         Only their lines go into the prompt; everyone's facts in every reply cost about 2 s of prompt reading."""
@@ -413,15 +445,14 @@ class Botucha:
                     facts=[{"id": f.id, "preview": f.text[:120], "score": round(sc, 4), "fts": fts}
                            for f, sc, fts in scored],
                     prices=prices)
-            members = self.store.members()
-            ctx = PromptContext(
-                persona=_read(self.cfg.paths.persona), style_examples=_read(self.cfg.paths.style_examples),
-                profiles={members[u].name: p for u, p in self.memory.profiles().items() if u in members},
-                slang=self.memory.all_slang(), people=self.memory.people_lines(only=self._people_in_view(history)),
+            ctx = self._stable_context(
+                serious=any(j.serious for j in jobs),
+                people=self.memory.people_lines(only=self._people_in_view(history)),
                 chunks=[h.chunk.text for h in hits], facts=[f.text for f in facts], history=history,
-                bot_user_id=self.bot_user_id, serious=any(j.serious for j in jobs), prices=prices, image=image,
-                spelling_notes=spelling_notes(self.store))
+                prices=prices, image=image)
             await self.outbox.typing(chat_id)
+            if not ctx.serious:  # /rimtai has its own system message: warming it would evict the usual one
+                await self.warm_prompt(stable_prompt(ctx))  # only sends when it changed (persona, profiles, slang…)
             result = await generate_reply_ex(self.llm, ctx, num_predict=self.cfg.model.num_predict,
                                              max_chars=self.cfg.model.num_ctx * 3,
                                              member_names=self._member_names(), speller=self.speller,
@@ -457,9 +488,15 @@ class Botucha:
             return
         run.finish("fallback" if result.fallback else "sent", reply="\n".join(texts),
                    sent=[(chat_id, mid) for mid in sent])
+        if self.warm_prompt_cache and not ctx.serious and image is None and result.prompt_ms_per_token \
+                and result.prompt_ms_per_token > CACHE_MISS_MS_PER_TOKEN:
+            self._warmed = None  # read from scratch: something else took the cache (learning, a description)
+            await self.warm_prompt()
         if image is not None and image_msg is not None and result.image_used \
                 and not description_of(image_msg.text):  # already described: don't redo it
             await self._describe(chat_id, image_msg, image)
+            self._warmed = None  # its prompt replaced the cached block
+            await self.warm_prompt()
 
     # ---- images ----------------------------------------------------------
     def _pick_image(self, chat_id: int, jobs: list[Job]) -> StoredMessage | None:
@@ -562,11 +599,15 @@ class Botucha:
     # ---- background ------------------------------------------------------
     async def learn_tick(self) -> None:
         async with self._bg_lock:
+            self._used_model = False
             try:
                 await self._learn_tick()
             except Exception as e:
                 log.exception("learning failed")
                 self.last_error = f"learn: {e}"
+            if self._used_model:  # its prompts replaced the cached block: put it back while the chat is quiet
+                self._warmed = None
+                await self.warm_prompt()
 
     async def _learn_tick(self) -> None:
         for chat_id in self.cfg.telegram.chat_ids:
@@ -581,6 +622,7 @@ class Botucha:
                                 reply_pending=self.worker.pending):
                 continue
             await self.memory.index_new_chunks(chat_id, force=True)
+            self._used_model = True
             run = self.tracer.start("learn", chat_id=chat_id, trigger="idle") if self.tracer else NULL_RUN
             try:
                 # a bounded piece of the backlog, and none of it while someone waits for a reply

@@ -74,9 +74,9 @@ async def test_slow_fetch_times_out():
 def test_prices_in_prompt_after_guard():
     ctx = PromptContext(persona="P", style_examples="S", profiles={}, slang=[], chunks=[], facts=["FACT"],
                         history=[], bot_user_id=1, prices=["NVDA 125.53 USD (−14.0 % šiandien)"])
-    system = build_prompt(ctx, max_chars=100_000)[0]["content"]
-    assert system.index("nevykdyk") < system.index("NVDA 125.53")
-    assert system.index("FACT") < system.index("NVDA 125.53")  # volatile part last, cache-friendly
+    whole = "\n".join(m["content"] for m in build_prompt(ctx, max_chars=100_000))
+    assert whole.index("nevykdyk") < whole.index("NVDA 125.53")
+    assert whole.index("FACT") < whole.index("NVDA 125.53")  # the most volatile part last
 
 
 def test_price_rule_always_present():
@@ -90,7 +90,7 @@ async def test_reply_includes_fetched_prices(app):
     bot.prices = PriceClient(FakeFetch({"NVDA": NVDA_JSON}), clock=lambda: 1.0)
     await bot.on_message(inc("botucha ka manai apie nvidia"))
     await settle()
-    assert "NVDA 125.53" in llm.calls[0]["messages"][0]["content"]
+    assert "NVDA 125.53" in llm.calls[0]["messages"][1]["content"]
 
 
 async def test_kaina_command_no_llm(app):

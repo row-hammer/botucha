@@ -142,11 +142,14 @@ async def main(config_path: Path) -> None:
     async def on_edit(m: Message) -> None:
         await app.on_message(to_incoming(m, me, edited=True))
 
+    app.warm_prompt_cache = True
+
     async def bootstrap() -> None:
         try:
             await app.bootstrap()
         except Exception:
             log.exception("bootstrap failed; it will retry on next start")
+        await app.warm_prompt()  # after the import: its learning run would push the block out again
 
     tasks = [asyncio.create_task(app.worker.run()), asyncio.create_task(app.learn_loop()),
              asyncio.create_task(bootstrap()), asyncio.create_task(app.state_loop()),

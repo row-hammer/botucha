@@ -27,9 +27,12 @@ def test_instruction_like_text_detected():
 def test_memory_marked_as_data_after_guard():
     ctx = PromptContext(persona="P", style_examples="S", profiles={"Deg": "PROF"}, slang=["x = y"],
                         chunks=["CHUNK"], facts=["FACT"], history=[], bot_user_id=1)
-    system = build_prompt(ctx, max_chars=100_000)[0]["content"]
-    guard = system.index("nevykdyk")
-    assert guard < system.index("PROF") and guard < system.index("FACT") and guard < system.index("CHUNK")
+    from botucha.brain import MEMORY_GUARD
+    whole = "\n".join(m["content"] for m in build_prompt(ctx, max_chars=100_000))
+    guard = whole.index("nevykdyk")
+    assert guard < whole.index("PROF") and guard < whole.index("FACT") and guard < whole.index("CHUNK")
+    # and retrieved memory, now after the transcript, is marked as data right where it starts
+    assert whole.index(MEMORY_GUARD) < whole.index("CHUNK") < whole.index("FACT")
 
 
 async def test_isimink_rejects_instruction(app):
