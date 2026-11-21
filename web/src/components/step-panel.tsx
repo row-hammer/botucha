@@ -1,14 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { statusText } from "@/components/trace-bits";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { api } from "@/lib/api";
 import { fmtMs } from "@/lib/format";
 import { useT } from "@/lib/i18n";
+import { useApi } from "@/lib/query";
 import type { Step } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -60,14 +60,9 @@ function KeyValues({ rows }: { rows: [string, string][] }) {
 }
 
 function PromptView({ traceId, t }: { traceId: number; t: ReturnType<typeof useT> }) {
-  const [prompt, setPrompt] = useState<string | null | undefined>(undefined);
   const [open, setOpen] = useState(false);
-  useEffect(() => {
-    if (open && prompt === undefined)
-      api<{ prompt: string | null }>(`/api/traces/${traceId}/prompt`)
-        .then((r) => setPrompt(r.prompt))
-        .catch(() => setPrompt(null));
-  }, [open, prompt, traceId]);
+  const query = useApi<{ prompt: string | null }>(open ? `/api/traces/${traceId}/prompt` : null);
+  const prompt = query.error ? null : query.data?.prompt;
   return (
     <div className="flex flex-col gap-2">
       <Button size="sm" variant="outline" className="self-start" onClick={() => setOpen((o) => !o)}>

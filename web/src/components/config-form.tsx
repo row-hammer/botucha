@@ -9,8 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ApiError, api, post } from "@/lib/api";
+import { ApiError, post } from "@/lib/api";
 import { useT } from "@/lib/i18n";
+import { useApi } from "@/lib/query";
 
 // same ranges as the API (botucha/webapi/routes_settings.py)
 const NUMBERS: [string, number, number, boolean][] = [
@@ -45,15 +46,13 @@ export function ConfigForm() {
   const t = useT();
   const [error, setError] = useState("");
   const form = useForm<Values>({ resolver: zodResolver(schema) as never });
+  const query = useApi<{ values: Record<string, number | string[]> }>("/api/config");
   useEffect(() => {
-    api<{ values: Record<string, number | string[]> }>("/api/config")
-      .then(({ values }) => {
-        const v: Values = {};
-        for (const [k, val] of Object.entries(values)) v[field(k)] = Array.isArray(val) ? val.join(", ") : val;
-        form.reset(v);
-      })
-      .catch(() => {});
-  }, [form]);
+    if (!query.data || form.formState.isDirty) return; // never overwrite unsaved edits
+    const v: Values = {};
+    for (const [k, val] of Object.entries(query.data.values)) v[field(k)] = Array.isArray(val) ? val.join(", ") : val;
+    form.reset(v);
+  }, [query.data, form]);
 
   const submit = form.handleSubmit(async (v) => {
     const values: Record<string, unknown> = Object.fromEntries(NUMBERS.map(([k]) => [k, Number(v[field(k)])]));

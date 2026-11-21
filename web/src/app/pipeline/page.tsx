@@ -2,44 +2,41 @@
 
 import { CircleCheck, MessageSquare, Repeat, Send, TriangleAlert, VolumeX } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { Suspense } from "react";
 import { ChartCard } from "@/components/chart-card";
 import { LiveRun } from "@/components/live-run";
 import { PageHeader } from "@/components/page-header";
 import { PipelineFlow } from "@/components/pipeline-flow";
+import { QueryError } from "@/components/query-error";
 import { StageChart, StageShare } from "@/components/stage-chart";
 import { StatCard } from "@/components/stat-card";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { api } from "@/lib/api";
 import { fmtNum } from "@/lib/format";
 import { useLocale, useT } from "@/lib/i18n";
-import { onTrace } from "@/lib/live";
 import { pct } from "@/lib/pipeline";
+import { useApi } from "@/lib/query";
 import type { Pipeline } from "@/lib/types";
+import { useUrlState } from "@/lib/url-state";
 
-type Range = "24h" | "7d" | "30d";
+const RANGES = ["24h", "7d", "30d"] as const;
+type Range = (typeof RANGES)[number];
 
 export default function PipelinePage() {
+  return (
+    <Suspense>
+      <PipelineView />
+    </Suspense>
+  );
+}
+
+function PipelineView() {
   const t = useT();
   const locale = useLocale();
   const router = useRouter();
-  const [range, setRange] = useState<Range>("24h");
-  const [p, setP] = useState<Pipeline | null>(null);
-  const [error, setError] = useState(false);
-
-  const load = useCallback(() => {
-    api<Pipeline>(`/api/pipeline?range=${range}`)
-      .then((r) => {
-        setP(r);
-        setError(false);
-      })
-      .catch(() => setError(true));
-  }, [range]);
-  useEffect(() => {
-    load();
-    return onTrace(load);
-  }, [load]);
+  const [range, setRange] = useUrlState<Range>("range", "24h", RANGES);
+  const query = useApi<Pipeline>(`/api/pipeline?range=${range}`, { keepPrevious: true });
+  const p = query.data ?? null;
 
   const tick = (ts: number) =>
     range === "24h"
@@ -54,7 +51,7 @@ export default function PipelinePage() {
       <PageHeader title={t("nav.pipeline")}>
         <Tabs value={range} onValueChange={(v) => setRange(v as Range)}>
           <TabsList>
-            {(["24h", "7d", "30d"] as Range[]).map((x) => (
+            {RANGES.map((x) => (
               <TabsTrigger key={x} value={x}>
                 {t(`overview.range.${x}`)}
               </TabsTrigger>
@@ -63,11 +60,7 @@ export default function PipelinePage() {
         </Tabs>
       </PageHeader>
       <div className="flex flex-col gap-4 p-4">
-        {error ? (
-          <p role="alert" className="rounded-md border border-bad/40 bg-bad/10 px-3 py-2 text-bad text-sm">
-            {t("common.loadFailed")}
-          </p>
-        ) : null}
+        <QueryError error={query.error} onRetry={() => query.refetch()} />
         <LiveRun />
 
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">

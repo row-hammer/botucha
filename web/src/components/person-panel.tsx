@@ -11,6 +11,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { api, post } from "@/lib/api";
 import { useT } from "@/lib/i18n";
+import { useApi } from "@/lib/query";
 import type { Fact, PeopleGraph, Person } from "@/lib/types";
 
 export function PersonPanel({
@@ -25,15 +26,12 @@ export function PersonPanel({
   onChanged: () => void;
 }) {
   const t = useT();
-  const [facts, setFacts] = useState<Fact[]>([]);
+  const facts = useApi<Fact[]>(person ? `/api/facts?kind=fact&person_id=${person.id}` : null).data ?? [];
   const [aliases, setAliases] = useState("");
-  useEffect(() => {
-    if (!person) return;
-    setAliases(person.aliases.join(", "));
-    api<Fact[]>(`/api/facts?kind=fact&person_id=${person.id}`)
-      .then(setFacts)
-      .catch(() => setFacts([]));
-  }, [person]);
+  const personId = person?.id;
+  const personAliases = person?.aliases.join(", ") ?? "";
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset the field when another person opens
+  useEffect(() => setAliases(personAliases), [personId]);
   const names = new Map(graph.people.map((p) => [p.id, p.name]));
   const rels = person ? graph.relations.filter((r) => r.a === person.id || r.b === person.id) : [];
 

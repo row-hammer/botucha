@@ -1,14 +1,14 @@
 "use client";
 
 import { Sparkles } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
-import { toast } from "sonner";
+import { useState } from "react";
+import { QueryError } from "@/components/query-error";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { api, post } from "@/lib/api";
+import { post } from "@/lib/api";
 import { useT } from "@/lib/i18n";
-import { onTrace } from "@/lib/live";
+import { queryClient, useApi } from "@/lib/query";
 import type { ClaudeStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -23,24 +23,16 @@ const REASON_KEY: Record<NonNullable<ClaudeStatus["reason"]>, string> = {
 /** Claude proofreading: whether it runs now and why not, today's budget, and the on/off switch. */
 export function ClaudeCard() {
   const t = useT();
-  const [s, setS] = useState<ClaudeStatus | null>(null);
+  const query = useApi<ClaudeStatus>("/api/claude");
+  const s = query.data ?? null;
   const [busy, setBusy] = useState(false);
-  const load = useCallback(() => {
-    api<ClaudeStatus>("/api/claude")
-      .then(setS)
-      .catch(() => setS(null));
-  }, []);
-  useEffect(() => {
-    load();
-    return onTrace(load);
-  }, [load]);
 
   const toggle = async (on: boolean) => {
     setBusy(true);
     try {
-      setS(await post<ClaudeStatus>("/api/control/claude", { on }));
+      queryClient.setQueryData(["/api/claude"], await post<ClaudeStatus>("/api/control/claude", { on }));
     } catch {
-      toast.error(t("common.loadFailed"));
+      /* post() already showed the error */
     } finally {
       setBusy(false);
     }
@@ -58,8 +50,11 @@ export function ClaudeCard() {
         <CardDescription className="text-xs">{t("quality.claude.hint")}</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3 text-sm">
+        <QueryError error={query.error} onRetry={() => query.refetch()} />
         {!s ? (
-          <p className="text-muted-foreground">{t("common.loading")}</p>
+          query.error ? null : (
+            <p className="text-muted-foreground">{t("common.loading")}</p>
+          )
         ) : (
           <>
             <div className="flex flex-wrap items-center justify-between gap-3">

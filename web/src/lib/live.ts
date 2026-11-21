@@ -1,6 +1,7 @@
 "use client";
 
 import { create } from "zustand";
+import { invalidateTraceData } from "@/lib/query";
 import type { Progress, Status, TraceSummary } from "@/lib/types";
 
 type Listener = (t: TraceSummary) => void;
@@ -27,6 +28,7 @@ export function startLive(): void {
       const { [t.id]: _done, ...running } = s.running;
       return { running };
     });
+    invalidateTraceData(); // every chart and list built from traces refreshes once
     for (const l of listeners) l(t);
   });
 }

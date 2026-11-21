@@ -1,11 +1,12 @@
 "use client";
 
 import { Plus } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { PeopleGraphView } from "@/components/people-graph";
 import { PersonPanel } from "@/components/person-panel";
+import { QueryError } from "@/components/query-error";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -17,14 +18,18 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ApiError, api, post } from "@/lib/api";
+import { ApiError, post } from "@/lib/api";
 import { useT } from "@/lib/i18n";
+import { invalidate, useApi } from "@/lib/query";
 import type { PeopleGraph, Person } from "@/lib/types";
 
 export default function PeoplePage() {
   const t = useT();
-  const [graph, setGraph] = useState<PeopleGraph | null>(null);
-  const [selected, setSelected] = useState<Person | null>(null);
+  const query = useApi<PeopleGraph>("/api/people");
+  const graph = query.data ?? null;
+  const [picked, setSelected] = useState<Person | null>(null);
+  // follow edits: the open panel shows the person as the latest data has them
+  const selected = picked ? (graph?.people.find((p) => p.id === picked.id) ?? null) : null;
   const [link, setLink] = useState<{ a: number; b: number } | null>(null);
   const [rel, setRel] = useState("");
   const [adding, setAdding] = useState(false);
@@ -32,15 +37,7 @@ export default function PeoplePage() {
   const [aliases, setAliases] = useState("");
   const [error, setError] = useState("");
 
-  const load = useCallback(() => {
-    api<PeopleGraph>("/api/people")
-      .then((g) => {
-        setGraph(g);
-        setSelected((s) => (s ? (g.people.find((p) => p.id === s.id) ?? null) : null));
-      })
-      .catch(() => {});
-  }, []);
-  useEffect(load, [load]);
+  const load = useCallback(() => invalidate("/api/people", "/api/facts"), []);
   const nameOf = (id: number) => graph?.people.find((p) => p.id === id)?.name ?? "";
 
   const saveRelation = async () => {
@@ -84,6 +81,7 @@ export default function PeoplePage() {
         </Button>
       </PageHeader>
       <div className="flex flex-col gap-2 p-4">
+        <QueryError error={query.error} onRetry={() => query.refetch()} />
         <div className="flex gap-4 text-muted-foreground text-xs">
           <span className="flex items-center gap-1.5">
             <span className="h-0.5 w-5 bg-chart-1" /> {t("people.legendRelation")}

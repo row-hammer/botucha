@@ -5,44 +5,38 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Confirm } from "@/components/confirm";
 import { PageHeader } from "@/components/page-header";
+import { QueryError } from "@/components/query-error";
 import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { api, post } from "@/lib/api";
+import { post } from "@/lib/api";
 import { fmtTime } from "@/lib/format";
 import { useLocale, useT } from "@/lib/i18n";
 import { useLive } from "@/lib/live";
+import { useApi } from "@/lib/query";
 import type { Status } from "@/lib/types";
 
 export default function ControlsPage() {
   const t = useT();
   const locale = useLocale();
   const live = useLive((s) => s.status);
+  const first = useApi<Status>("/api/status");
+  const journal = useApi<{ lines: string[] }>("/api/control/journal?n=50");
   const [status, setStatus] = useState<Status | null>(null);
   const [freq, setFreq] = useState("");
   const [custom, setCustom] = useState("");
-  const [lines, setLines] = useState<string[]>([]);
-  const s = status ?? live;
+  const lines = journal.data?.lines ?? [];
+  const s = status ?? live ?? first.data ?? null;
 
   useEffect(() => {
-    api<Status>("/api/status")
-      .then((st) => {
-        setStatus(st);
-        setFreq(String(st.random_n));
-      })
-      .catch(() => {});
-  }, []);
+    if (first.data) setFreq((cur) => cur || String(first.data.random_n)); // fill the field once
+  }, [first.data]);
   useEffect(() => {
     if (live) setStatus(live);
   }, [live]);
-  const loadJournal = useCallback(() => {
-    api<{ lines: string[] }>("/api/control/journal?n=50")
-      .then((r) => setLines(r.lines))
-      .catch(() => {});
-  }, []);
-  useEffect(loadJournal, [loadJournal]);
+  const loadJournal = useCallback(() => void journal.refetch(), [journal]);
 
   const apply = async (body: Record<string, unknown>) => {
     try {
@@ -67,6 +61,11 @@ export default function ControlsPage() {
     <>
       <PageHeader title={t("nav.controls")} />
       <div className="grid gap-4 p-4 lg:grid-cols-2">
+        {first.error && !s ? (
+          <div className="lg:col-span-2">
+            <QueryError error={first.error} onRetry={() => first.refetch()} />
+          </div>
+        ) : null}
         <Card>
           <CardHeader>
             <CardTitle>{t("controls.replying")}</CardTitle>

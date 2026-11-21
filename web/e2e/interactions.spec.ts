@@ -119,6 +119,37 @@ test.describe("desktop", () => {
     await expect(page.getByRole("row").filter({ hasText: "Rūta" })).toBeVisible();
   });
 
+  test("range and filters live in the URL and survive a reload", async ({ page }) => {
+    await page.goto("/pipeline/");
+    await settle(page);
+    await page.getByRole("tab", { name: "7 days" }).click();
+    await expect(page).toHaveURL(/range=7d/);
+    await page.reload();
+    await settle(page);
+    await expect(page.getByRole("tab", { name: "7 days" })).toHaveAttribute("data-state", "active");
+    await page.goto("/thinking/?outcome=fallback");
+    await settle(page);
+    await expect(page.getByRole("row")).toHaveCount(2); // header + the one fallback
+    await page.goBack();
+    await expect(page).toHaveURL(/range=7d/);
+  });
+
+  test("a failing read shows an error with a working retry", async ({ page, problems }) => {
+    let fail = true;
+    await page.route("**/api/quality?*", (route) =>
+      fail ? route.fulfill({ status: 500, json: { error: "boom" } }) : route.fallback(),
+    );
+    await page.goto("/quality/");
+    await settle(page);
+    const alert = page.getByRole("alert").filter({ hasText: "boom" });
+    await expect(alert).toBeVisible({ timeout: 10_000 }); // after the quiet retries
+    fail = false;
+    await alert.getByRole("button", { name: "Retry" }).click();
+    await expect(alert).toBeHidden();
+    await expect(page.getByRole("row").filter({ hasText: "glichiuoja" })).toBeVisible();
+    problems.splice(0); // the 500s above were on purpose
+  });
+
   test("language, theme and sidebar switches", async ({ page }) => {
     await page.goto("/");
     await settle(page);

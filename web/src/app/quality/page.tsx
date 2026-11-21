@@ -1,27 +1,30 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { Suspense } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
 import { ActivityHeatmap } from "@/components/activity-heatmap";
 import { ChartCard } from "@/components/chart-card";
 import { ClaudeCard } from "@/components/claude-card";
 import { PageHeader } from "@/components/page-header";
+import { QueryError } from "@/components/query-error";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { api, post } from "@/lib/api";
+import { post } from "@/lib/api";
 import { fmtMs, fmtNum, fmtTime } from "@/lib/format";
 import { useLocale, useT } from "@/lib/i18n";
-import { onTrace } from "@/lib/live";
 import { pct } from "@/lib/pipeline";
+import { invalidate, useApi } from "@/lib/query";
 import type { Quality } from "@/lib/types";
+import { useUrlState } from "@/lib/url-state";
 import { cn } from "@/lib/utils";
 
-type Range = "24h" | "7d" | "30d";
+const RANGES = ["24h", "7d", "30d"] as const;
+type Range = (typeof RANGES)[number];
 const axis = { stroke: "var(--muted-foreground)", fontSize: 12, tickLine: false, axisLine: false };
 const tooltip = {
   cursor: { fill: "var(--muted)" },
@@ -72,32 +75,27 @@ function ContextMeter({ c }: { c: Quality["context"] }) {
 }
 
 export default function QualityPage() {
+  return (
+    <Suspense>
+      <QualityView />
+    </Suspense>
+  );
+}
+
+function QualityView() {
   const t = useT();
   const locale = useLocale();
-  const [range, setRange] = useState<Range>("7d");
-  const [q, setQ] = useState<Quality | null>(null);
-  const [error, setError] = useState(false);
-
-  const load = useCallback(() => {
-    api<Quality>(`/api/quality?range=${range}`)
-      .then((r) => {
-        setQ(r);
-        setError(false);
-      })
-      .catch(() => setError(true));
-  }, [range]);
-  useEffect(() => {
-    load();
-    return onTrace(load);
-  }, [load]);
+  const [range, setRange] = useUrlState<Range>("range", "7d", RANGES);
+  const query = useApi<Quality>(`/api/quality?range=${range}`, { keepPrevious: true });
+  const q = query.data ?? null;
 
   const setKnown = async (word: string, known: boolean) => {
     try {
       await post("/api/known-words", { word, known });
       toast.success(known ? t("quality.words.added", { word }) : t("quality.words.removed", { word }));
-      load();
+      invalidate("/api/quality");
     } catch {
-      toast.error(t("common.loadFailed"));
+      /* post() already showed the error */
     }
   };
 
@@ -113,7 +111,7 @@ export default function QualityPage() {
       <PageHeader title={t("nav.quality")}>
         <Tabs value={range} onValueChange={(v) => setRange(v as Range)}>
           <TabsList>
-            {(["24h", "7d", "30d"] as Range[]).map((x) => (
+            {RANGES.map((x) => (
               <TabsTrigger key={x} value={x}>
                 {t(`overview.range.${x}`)}
               </TabsTrigger>
@@ -122,11 +120,7 @@ export default function QualityPage() {
         </Tabs>
       </PageHeader>
       <div className="flex flex-col gap-4 p-4">
-        {error ? (
-          <p role="alert" className="rounded-md border border-bad/40 bg-bad/10 px-3 py-2 text-bad text-sm">
-            {t("common.loadFailed")}
-          </p>
-        ) : null}
+        <QueryError error={query.error} onRetry={() => query.refetch()} />
 
         <div className="grid gap-4 xl:grid-cols-5">
           <Card className="gap-2 xl:col-span-3">

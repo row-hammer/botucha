@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertTriangle, CircleCheck, MessageSquare, ThumbsUp, Timer, TriangleAlert, Zap } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { Suspense } from "react";
 import {
   Bar,
   BarChart,
@@ -16,18 +16,21 @@ import {
 } from "recharts";
 import { ChartCard } from "@/components/chart-card";
 import { PageHeader } from "@/components/page-header";
+import { QueryError } from "@/components/query-error";
 import { StatCard } from "@/components/stat-card";
 import { StatusBadge } from "@/components/status-badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { api } from "@/lib/api";
 import { fmtMs, fmtNum, fmtTime } from "@/lib/format";
 import { useLocale, useT } from "@/lib/i18n";
-import { onTrace, useLive } from "@/lib/live";
+import { useLive } from "@/lib/live";
 import { pct } from "@/lib/pipeline";
+import { useApi } from "@/lib/query";
 import type { Metrics, Pipeline } from "@/lib/types";
+import { useUrlState } from "@/lib/url-state";
 
-type Range = "24h" | "7d" | "30d";
+const RANGES = ["24h", "7d", "30d"] as const;
+type Range = (typeof RANGES)[number];
 const axis = { stroke: "var(--muted-foreground)", fontSize: 12, tickLine: false, axisLine: false };
 const tooltipStyle = {
   contentStyle: { background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 },
@@ -35,27 +38,22 @@ const tooltipStyle = {
 };
 
 export default function Overview() {
+  return (
+    <Suspense>
+      <OverviewView />
+    </Suspense>
+  );
+}
+
+function OverviewView() {
   const t = useT();
   const locale = useLocale();
   const status = useLive((s) => s.status);
-  const [range, setRange] = useState<Range>("24h");
-  const [m, setM] = useState<Metrics | null>(null);
-  const [p, setP] = useState<Pipeline | null>(null);
-  const [error, setError] = useState(false);
-
-  const load = useCallback(() => {
-    Promise.all([api<Metrics>(`/api/metrics?range=${range}`), api<Pipeline>(`/api/pipeline?range=${range}`)])
-      .then(([metrics, pipeline]) => {
-        setM(metrics);
-        setP(pipeline);
-        setError(false);
-      })
-      .catch(() => setError(true));
-  }, [range]);
-  useEffect(() => {
-    load();
-    return onTrace(load);
-  }, [load]);
+  const [range, setRange] = useUrlState<Range>("range", "24h", RANGES);
+  const metrics = useApi<Metrics>(`/api/metrics?range=${range}`, { keepPrevious: true });
+  const pipeline = useApi<Pipeline>(`/api/pipeline?range=${range}`, { keepPrevious: true });
+  const m = metrics.data ?? null;
+  const p = pipeline.data ?? null;
 
   const tick = (ts: number) =>
     range === "24h"
@@ -72,7 +70,7 @@ export default function Overview() {
       <PageHeader title={t("nav.overview")}>
         <Tabs value={range} onValueChange={(v) => setRange(v as Range)}>
           <TabsList>
-            {(["24h", "7d", "30d"] as Range[]).map((r) => (
+            {RANGES.map((r) => (
               <TabsTrigger key={r} value={r}>
                 {t(`overview.range.${r}`)}
               </TabsTrigger>
@@ -81,11 +79,13 @@ export default function Overview() {
         </Tabs>
       </PageHeader>
       <div className="flex flex-col gap-4 p-4">
-        {error ? (
-          <p role="alert" className="rounded-md border border-bad/40 bg-bad/10 px-3 py-2 text-bad text-sm">
-            {t("common.loadFailed")}
-          </p>
-        ) : null}
+        <QueryError
+          error={metrics.error ?? pipeline.error}
+          onRetry={() => {
+            void metrics.refetch();
+            void pipeline.refetch();
+          }}
+        />
         <Card className="py-3">
           <CardContent className="flex flex-wrap items-center gap-x-6 gap-y-2 px-4 text-sm">
             <StatusBadge state={status?.bot} />

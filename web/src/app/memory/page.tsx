@@ -2,11 +2,12 @@
 
 import { type ColumnDef, flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import { Pencil, Plus, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Confirm } from "@/components/confirm";
 import { FactDialog } from "@/components/fact-dialog";
 import { PageHeader } from "@/components/page-header";
+import { QueryError } from "@/components/query-error";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +17,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/api";
 import { fmtTime } from "@/lib/format";
 import { useLocale, useT } from "@/lib/i18n";
+import { invalidate, useApi } from "@/lib/query";
 import type { Fact, PeopleGraph } from "@/lib/types";
 
 type Kind = "fact" | "slang";
@@ -31,24 +33,14 @@ export default function MemoryPage() {
   const [q, setQ] = useState("");
   const [person, setPerson] = useState("all");
   const [source, setSource] = useState("all");
-  const [rows, setRows] = useState<Fact[]>([]);
-  const [graph, setGraph] = useState<PeopleGraph | null>(null);
   const [editing, setEditing] = useState<Fact | null | undefined>(undefined);
-
-  const load = useCallback(() => {
-    const p = new URLSearchParams({ kind });
-    if (person !== "all") p.set("person_id", person);
-    if (source !== "all") p.set("source", source);
-    api<Fact[]>(`/api/facts?${p}`)
-      .then(setRows)
-      .catch(() => {});
-  }, [kind, person, source]);
-  useEffect(load, [load]);
-  useEffect(() => {
-    api<PeopleGraph>("/api/people")
-      .then(setGraph)
-      .catch(() => {});
-  }, []);
+  const params = new URLSearchParams({ kind });
+  if (person !== "all") params.set("person_id", person);
+  if (source !== "all") params.set("source", source);
+  const facts = useApi<Fact[]>(`/api/facts?${params}`, { keepPrevious: true });
+  const graph = useApi<PeopleGraph>("/api/people").data ?? null;
+  const rows = useMemo(() => facts.data ?? [], [facts.data]);
+  const load = useCallback(() => invalidate("/api/facts", "/api/people"), []);
 
   const names = useMemo(() => new Map(graph?.people.map((p) => [p.id, p.name]) ?? []), [graph]);
   const shown = useMemo(() => {
@@ -150,6 +142,7 @@ export default function MemoryPage() {
         </Button>
       </PageHeader>
       <div className="flex flex-col gap-3 p-4">
+        <QueryError error={facts.error} onRetry={() => facts.refetch()} />
         <div className="flex flex-wrap items-center gap-2">
           <Tabs value={kind} onValueChange={(v) => setKind(v as Kind)}>
             <TabsList>

@@ -37,7 +37,8 @@
     "saved": "Išsaugota",
     "deleted": "Ištrinta",
     "loadOlder": "Rodyti senesnius",
-    "loadFailed": "Nepavyko gauti duomenų iš boto. Ar veikia valdymo skydelio paslauga?"
+    "loadFailed": "Nepavyko gauti duomenų iš boto. Ar veikia valdymo skydelio paslauga?",
+    "retry": "Bandyti dar kartą"
   },
   "errors": {
     "busy": "Duomenų bazė užimta, pabandyk po akimirkos.",

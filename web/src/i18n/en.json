@@ -37,7 +37,8 @@
     "saved": "Saved",
     "deleted": "Deleted",
     "loadOlder": "Load older",
-    "loadFailed": "Couldn’t load data from the bot. Is the dashboard service running?"
+    "loadFailed": "Couldn’t load data from the bot. Is the dashboard service running?",
+    "retry": "Retry"
   },
   "errors": {
     "busy": "The database is busy, try again in a moment.",

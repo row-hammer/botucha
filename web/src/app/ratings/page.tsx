@@ -2,16 +2,18 @@
 
 import { Download, PencilLine, ThumbsDown, ThumbsUp } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { PageHeader } from "@/components/page-header";
+import { QueryError } from "@/components/query-error";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { api, post } from "@/lib/api";
+import { post } from "@/lib/api";
 import { fmtTime } from "@/lib/format";
 import { useLocale, useT } from "@/lib/i18n";
+import { invalidate, queryClient, useApi } from "@/lib/query";
 import type { Rating } from "@/lib/types";
 
 const key = (r: Rating) => `${r.kind}:${r.chat_id}:${r.msg_id}:${r.user_id}`;
@@ -19,18 +21,15 @@ const key = (r: Rating) => `${r.kind}:${r.chat_id}:${r.msg_id}:${r.user_id}`;
 export default function RatingsPage() {
   const t = useT();
   const locale = useLocale();
-  const [rows, setRows] = useState<Rating[] | null>(null);
+  const query = useApi<Rating[]>("/api/ratings");
+  const rows = query.data ?? null;
   const [onlyOpen, setOnlyOpen] = useState(false);
-  const load = useCallback(() => {
-    api<Rating[]>("/api/ratings")
-      .then(setRows)
-      .catch(() => setRows([]));
-  }, []);
-  useEffect(load, [load]);
   const shown = useMemo(() => (rows ?? []).filter((r) => !onlyOpen || !r.reviewed), [rows, onlyOpen]);
 
   const toggle = async (r: Rating, reviewed: boolean) => {
-    setRows((cur) => cur?.map((x) => (key(x) === key(r) ? { ...x, reviewed } : x)) ?? null);
+    queryClient.setQueryData<Rating[]>(["/api/ratings"], (cur) =>
+      cur?.map((x) => (key(x) === key(r) ? { ...x, reviewed } : x)),
+    );
     try {
       await post("/api/ratings/review", {
         kind: r.kind,
@@ -40,7 +39,7 @@ export default function RatingsPage() {
         reviewed,
       });
     } catch {
-      load();
+      invalidate("/api/ratings"); // put the real state back
     }
   };
 
@@ -60,7 +59,8 @@ export default function RatingsPage() {
           </a>
         </Button>
       </PageHeader>
-      <div className="p-4">
+      <div className="flex flex-col gap-3 p-4">
+        <QueryError error={query.error} onRetry={() => query.refetch()} />
         {rows !== null && shown.length === 0 ? (
           <Card>
             <CardContent className="py-10 text-center text-muted-foreground text-sm">{t("ratings.empty")}</CardContent>

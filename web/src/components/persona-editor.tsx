@@ -6,8 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { ApiError, api, post } from "@/lib/api";
+import { ApiError, post } from "@/lib/api";
 import { useT } from "@/lib/i18n";
+import { useApi } from "@/lib/query";
 import { cn } from "@/lib/utils";
 
 type Line = { type: "same" | "add" | "del"; text: string };
@@ -39,20 +40,21 @@ export function lineDiff(a: string, b: string): Line[] {
 
 export function PersonaEditor() {
   const t = useT();
+  const query = useApi<{ text: string; limit: number }>("/api/persona");
   const [saved, setSaved] = useState("");
   const [text, setText] = useState("");
-  const [limit, setLimit] = useState(0);
+  const limit = query.data?.limit ?? 0;
   const [review, setReview] = useState(false);
   const [error, setError] = useState("");
+  const [filled, setFilled] = useState(false);
   useEffect(() => {
-    api<{ text: string; limit: number }>("/api/persona")
-      .then((r) => {
-        setSaved(r.text);
-        setText(r.text);
-        setLimit(r.limit);
-      })
-      .catch(() => {});
-  }, []);
+    if (query.data && !filled) {
+      // fill the editor once; later refetches must not overwrite what is being typed
+      setSaved(query.data.text);
+      setText(query.data.text);
+      setFilled(true);
+    }
+  }, [query.data, filled]);
   const diff = useMemo(() => (review ? lineDiff(saved, text) : []), [review, saved, text]);
   const changed = diff.filter((d) => d.type !== "same");
 

@@ -1,11 +1,13 @@
 "use client";
 
+import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
 import { ArrowLeft, X } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { useNodeLabel } from "@/components/pipeline-flow";
+import { QueryError } from "@/components/query-error";
 import { StepPanel } from "@/components/step-panel";
 import { OutcomeBadge, useTriggerLabel } from "@/components/trace-bits";
 import { TraceGraph } from "@/components/trace-graph";
@@ -15,13 +17,17 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { api } from "@/lib/api";
+import { type ApiError, api } from "@/lib/api";
 import { fmtMs, fmtTime } from "@/lib/format";
 import { useLocale, useT } from "@/lib/i18n";
-import { onTrace } from "@/lib/live";
+import { useApi } from "@/lib/query";
 import type { Step, TraceDetail, TraceSummary } from "@/lib/types";
+import { useUrlState } from "@/lib/url-state";
 
 const PAGE = 50;
+
+const KINDS = ["all", "reply", "learn", "describe"] as const;
+const OUTCOMES = ["all", "sent", "fallback", "canned", "skipped", "error"] as const;
 
 function TraceList() {
   const t = useT();
@@ -29,52 +35,30 @@ function TraceList() {
   const params = useSearchParams();
   const path = params.get("path"); // drill-down from the Pipeline page
   const range = params.get("range") ?? "30d";
-  const [kind, setKind] = useState("all");
-  const [outcome, setOutcome] = useState(params.get("outcome") ?? "all");
-  const [rows, setRows] = useState<TraceSummary[] | null>(null);
-  const [more, setMore] = useState(false);
+  const [kind, setKind] = useUrlState("kind", "all", KINDS);
+  const [outcome, setOutcome] = useUrlState("outcome", "all", OUTCOMES);
 
-  const query = useCallback(
-    (before?: number) => {
-      const p = new URLSearchParams({ limit: String(PAGE) });
-      if (path) {
-        p.set("path", path);
-        p.set("range", range);
-      } else {
-        if (kind !== "all") p.set("kind", kind);
-        if (outcome !== "all") p.set("outcome", outcome);
-      }
-      if (before) p.set("before_id", String(before));
-      return api<TraceSummary[]>(`/api/traces?${p}`);
+  const filters = new URLSearchParams({ limit: String(PAGE) });
+  if (path) {
+    filters.set("path", path);
+    filters.set("range", range);
+  } else {
+    if (kind !== "all") filters.set("kind", kind);
+    if (outcome !== "all") filters.set("outcome", outcome);
+  }
+  // a finished trace refreshes every loaded page (invalidateTraceData), so new runs appear at the top
+  const query = useInfiniteQuery<TraceSummary[], ApiError>({
+    queryKey: [`/api/traces?${filters}`],
+    initialPageParam: 0,
+    queryFn: ({ pageParam, signal }) => {
+      const p = new URLSearchParams(filters);
+      if (pageParam) p.set("before_id", String(pageParam));
+      return api<TraceSummary[]>(`/api/traces?${p}`, { signal }, { quiet: true });
     },
-    [kind, outcome, path, range],
-  );
-  useEffect(() => {
-    query()
-      .then((r) => {
-        setRows(r);
-        setMore(r.length === PAGE);
-      })
-      .catch(() => setRows([]));
-  }, [query]);
-  useEffect(
-    () =>
-      onTrace((tr) => {
-        if (path) return; // the path of a new trace is not known here; reload to include it
-        if ((kind === "all" || tr.kind === kind) && (outcome === "all" || tr.outcome === outcome))
-          setRows((cur) =>
-            cur ? (cur.some((r) => r.id === tr.id) ? cur.map((r) => (r.id === tr.id ? tr : r)) : [tr, ...cur]) : cur,
-          );
-      }),
-    [kind, outcome, path],
-  );
-  const older = () => {
-    if (!rows?.length) return;
-    query(rows[rows.length - 1].id).then((r) => {
-      setRows([...rows, ...r]);
-      setMore(r.length === PAGE);
-    });
-  };
+    getNextPageParam: (last) => (last.length === PAGE ? last[last.length - 1].id : undefined),
+    placeholderData: keepPreviousData,
+  });
+  const rows = query.data ? query.data.pages.flat() : null;
 
   return (
     <>
@@ -91,24 +75,24 @@ function TraceList() {
             </Link>
           </Badge>
         ) : null}
-        <Select value={kind} onValueChange={setKind} disabled={!!path}>
+        <Select value={kind} onValueChange={(v) => setKind(v as (typeof KINDS)[number])} disabled={!!path}>
           <SelectTrigger size="sm" className="w-36">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {["all", "reply", "learn", "describe"].map((k) => (
+            {KINDS.map((k) => (
               <SelectItem key={k} value={k}>
                 {t(`thinking.kind.${k}`)}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
-        <Select value={outcome} onValueChange={setOutcome} disabled={!!path}>
+        <Select value={outcome} onValueChange={(v) => setOutcome(v as (typeof OUTCOMES)[number])} disabled={!!path}>
           <SelectTrigger size="sm" className="w-40">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {["all", "sent", "fallback", "canned", "skipped", "error"].map((o) => (
+            {OUTCOMES.map((o) => (
               <SelectItem key={o} value={o}>
                 {t(`thinking.outcome.${o}`)}
               </SelectItem>
@@ -117,8 +101,11 @@ function TraceList() {
         </Select>
       </PageHeader>
       <div className="flex flex-col gap-3 p-4">
+        <QueryError error={query.error} onRetry={() => query.refetch()} />
         {rows === null ? (
-          <p className="text-muted-foreground text-sm">{t("common.loading")}</p>
+          query.error ? null : (
+            <p className="text-muted-foreground text-sm">{t("common.loading")}</p>
+          )
         ) : rows.length === 0 ? (
           <Card>
             <CardContent className="py-10 text-center text-muted-foreground text-sm">{t("thinking.empty")}</CardContent>
@@ -126,8 +113,13 @@ function TraceList() {
         ) : (
           <TraceTable rows={rows} />
         )}
-        {more ? (
-          <Button variant="outline" className="self-center" onClick={older}>
+        {query.hasNextPage ? (
+          <Button
+            variant="outline"
+            className="self-center"
+            disabled={query.isFetchingNextPage}
+            onClick={() => query.fetchNextPage()}
+          >
             {t("common.loadOlder")}
           </Button>
         ) : null}
@@ -140,13 +132,10 @@ function TraceView({ id }: { id: number }) {
   const t = useT();
   const locale = useLocale();
   const trig = useTriggerLabel();
-  const [data, setData] = useState<TraceDetail | null | undefined>(undefined);
+  const query = useApi<TraceDetail>(`/api/traces/${id}`);
+  // null = gone (older than the 30 days traces are kept); undefined = still loading or failed
+  const data = query.error?.status === 404 ? null : query.data;
   const [selected, setSelected] = useState<Step | null>(null);
-  useEffect(() => {
-    api<TraceDetail>(`/api/traces/${id}`)
-      .then(setData)
-      .catch(() => setData(null));
-  }, [id]);
   const back = (
     <Button asChild size="sm" variant="ghost">
       <Link href="/thinking/">
@@ -155,7 +144,15 @@ function TraceView({ id }: { id: number }) {
       </Link>
     </Button>
   );
-  if (data === undefined) return <PageHeader title={t("nav.thinking")}>{back}</PageHeader>;
+  if (data === undefined)
+    return (
+      <>
+        <PageHeader title={t("nav.thinking")}>{back}</PageHeader>
+        <div className="p-4">
+          <QueryError error={query.error} onRetry={() => query.refetch()} />
+        </div>
+      </>
+    );
   if (data === null)
     return (
       <>

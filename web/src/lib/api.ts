@@ -28,6 +28,8 @@ async function getToken(): Promise<string> {
 export interface ApiOptions {
   /** statuses the caller shows itself (e.g. 422 next to a field); everything else gets a toast */
   inline?: number[];
+  /** no toast at all: queries retry and then show the error inline */
+  quiet?: boolean;
 }
 
 function lang() {
@@ -42,9 +44,10 @@ export async function api<T>(path: string, init: RequestInit = {}, opts: ApiOpti
   let res: Response;
   try {
     res = await fetch(path, { ...init, method, headers });
-  } catch {
+  } catch (e) {
+    if (init.signal?.aborted) throw e; // the page moved on; nothing to report
     const msg = translate(lang(), "errors.network");
-    toast.error(msg);
+    if (!opts.quiet) toast.error(msg);
     throw new ApiError(0, msg);
   }
   if (res.status === 403 && method !== "GET" && !retried) {
@@ -59,7 +62,9 @@ export async function api<T>(path: string, init: RequestInit = {}, opts: ApiOpti
     } catch {
       /* not JSON */
     }
-    if (res.status === 503 && msg === "busy") toast.error(translate(lang(), "errors.busy"));
+    if (opts.quiet) {
+      /* shown inline by the caller */
+    } else if (res.status === 503 && msg === "busy") toast.error(translate(lang(), "errors.busy"));
     else if (!opts.inline?.includes(res.status)) toast.error(translate(lang(), "errors.generic", { msg }));
     throw new ApiError(res.status, msg);
   }
