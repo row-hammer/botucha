@@ -35,6 +35,7 @@ user_calls_per_min = 5
 
 [paths]
 db = "botucha.db"
+# copy persona.example.md to persona.md and make it yours (persona.md is git-ignored)
 persona = "persona.md"
 style_examples = "style_examples.txt"
 # Telegram Desktop export loaded once on first start. Remove the line to skip.
