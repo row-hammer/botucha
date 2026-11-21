@@ -51,7 +51,8 @@ group message ─► Telegram ─► Botucha (Python, aiogram)
   - facts and slang are learned automatically while the chat is quiet;
   - members can teach him directly (`/isimink`, `/slengas`).
 - **People and relations.** Members and friends outside the group are known by name and word forms; every
-  fact is linked to everyone it mentions, so he knows who works for whom, who is friends with whom.
+  fact is linked to everyone it mentions. On top of that, explicit relations (`Jonas – darbdavys → Petras`)
+  say exactly who works for whom and who is friends with whom.
 - **Live market prices.** When a known name (spx, nasdaq, vwce, nvidia, btc, …) or any `$TICKER` comes up,
   he fetches the price from Yahoo Finance and uses only those numbers. `/kaina` gives a price instantly.
 - **Serious mode.** `/rimtai` or "rimtai" in a message gets a straight, factual answer without the act.
@@ -168,6 +169,7 @@ The unit assumes the project lives in `~/Projects/botucha` and uv in mise's defa
 |---|---|
 | `/pamirsk <nr>`, `/taisyk <nr> <tekstas>` | delete or correct a fact |
 | `/zmogus Vardas = pravardė1, pravardė2` | add a person with nicknames and word forms; existing facts are relinked |
+| `/rysys Jonas > darbdavys > Petras` | explicit relation "Jonas is Petras's employer" (any word form works); `/rysys` lists them, `/rysys trink <nr>` deletes one |
 | `/daznis <n>` | uninvited replies about 1 in n messages (default 25) |
 | `/isjunk`, `/ijunk` | off (still listens and stores) / on |
 | `/statusas` | model, memory size, ratings, uptime, last error |
@@ -219,6 +221,7 @@ Everything lives in `botucha.db`:
 | `chunks` (+ FTS5) | windows of consecutive messages, closed by 30 min of silence, 15 messages or 1200 characters, with a `bge-m3` embedding |
 | `facts` (+ FTS5) | facts and slang with source (`auto` or `cmd:<user id>`), timestamps and embedding |
 | `people`, `fact_people` | people (members and friends) with word forms; each fact linked to everyone it mentions |
+| `relations` | explicit directed relations between people (`a – rel → b`), set by the admin |
 | `profiles` | a short profile per member |
 | `feedback`, `corrections` | ratings and better versions of his replies |
 | `state` | cursors and persisted settings |

@@ -39,6 +39,18 @@ class Person:
 
 
 @dataclass
+class Relation:
+    """A directed, explicit link: a is <rel> of b (Jonas – darbdavys → Petras)."""
+    id: int
+    a: Person
+    rel: str
+    b: Person
+
+    def __str__(self) -> str:
+        return f"{self.a.name} – {self.rel} → {self.b.name}"
+
+
+@dataclass
 class ChunkHit:
     chunk: Chunk
     score: float
@@ -285,16 +297,46 @@ class Memory:
         by_id = {p.id: p for p in self.people()}
         return [by_id[r[0]] for r in rows if r[0] in by_id]
 
+    # ---- explicit relations between people --------------------------------
+    def add_relation(self, a: str, rel: str, b: str, source: str) -> int | None:
+        """Link two known people (any name or word form); None if either is unknown. Duplicates return the old id."""
+        pa, pb, rel = self.find_person(a), self.find_person(b), rel.strip().lower()
+        if pa is None or pb is None or pa.id == pb.id or not rel:
+            return None
+        self.db.execute("INSERT OR IGNORE INTO relations (a, rel, b, source, created) VALUES (?,?,?,?,?)",
+                        (pa.id, rel, pb.id, source, self.clock()))
+        self.db.commit()
+        return self.db.execute("SELECT id FROM relations WHERE a=? AND rel=? AND b=?", (pa.id, rel, pb.id)).fetchone()[0]
+
+    def relations(self, person_id: int | None = None) -> list[Relation]:
+        where, args = ("WHERE a=? OR b=?", (person_id, person_id)) if person_id is not None else ("", ())
+        by_id = {p.id: p for p in self.people()}
+        rows = self.db.execute(f"SELECT id, a, rel, b FROM relations {where} ORDER BY id", args).fetchall()
+        return [Relation(i, by_id[a], rel, by_id[b]) for i, a, rel, b in rows if a in by_id and b in by_id]
+
+    def delete_relation(self, relation_id: int) -> bool:
+        n = self.db.execute("DELETE FROM relations WHERE id=?", (relation_id,)).rowcount
+        self.db.commit()
+        return n > 0
+
     def people_lines(self, max_facts: int = 6) -> list[str]:
-        """One line per person with facts: 'Name (aliases): fact; fact. Susiję: A, B'."""
+        """One line per person with facts or relations:
+        'Name (aliases): fact; fact. Ryšiai: A – rel → B. Susiję: C' (Susiję = only co-mentioned in facts)."""
         lines = []
         for p in self.people():
             facts = [f.text.rstrip(".") for f in self.person_facts(p.id)][:max_facts]
-            rel = [r.name for r in self.related(p.id)]
-            if not facts:
+            rels = self.relations(p.id)
+            linked = {r.a.id for r in rels} | {r.b.id for r in rels}
+            rel = [r.name for r in self.related(p.id) if r.id not in linked]
+            if not facts and not rels:
                 continue
             head = p.name + (f" ({', '.join(p.aliases[:3])})" if p.aliases else "")
-            lines.append(f"{head}: {'; '.join(facts)}." + (f" Susiję: {', '.join(rel)}" if rel else ""))
+            body = f"{'; '.join(facts)}." if facts else ""
+            if rels:
+                body += f" Ryšiai: {'; '.join(map(str, rels))}."
+            if rel:
+                body += f" Susiję: {', '.join(rel)}"
+            lines.append(f"{head}: {body.strip()}")
         return lines
 
     # ---- profiles -------------------------------------------------------

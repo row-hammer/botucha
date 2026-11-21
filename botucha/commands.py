@@ -1,4 +1,4 @@
-"""Chat commands. Everyone: isimink, slengas, ka_zinai, tyla. Admin: pamirsk, taisyk, daznis, isjunk, ijunk, statusas.
+"""Chat commands. Everyone: isimink, slengas, ka_zinai, tyla. Admin: pamirsk, taisyk, zmogus, rysys, daznis, isjunk, ijunk, statusas.
 rimtai and atsimeni are routed through the reply worker, so handle_command returns None for them."""
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from .memory import Memory
 from .store import Store
 from .trigger import TriggerState
 
-ADMIN_ONLY = {"pamirsk", "taisyk", "daznis", "isjunk", "ijunk", "statusas", "ivertinimai", "zmogus"}
+ADMIN_ONLY = {"pamirsk", "taisyk", "daznis", "isjunk", "ijunk", "statusas", "ivertinimai", "zmogus", "rysys"}
 NOT_ADMIN = "tik bosas gali"
 
 
@@ -90,6 +90,7 @@ async def handle_command(name: str, args: str, sender_id: int, now: float, ctx: 
                 return "tokio nepazistu"
             lines = [person.name + (f" ({', '.join(person.aliases[:3])})" if person.aliases else "") + ":"]
             lines += [f"#{f.id} {f.text}" for f in mem.person_facts(person.id)]
+            lines += [f"ryšys: {r}" for r in mem.relations(person.id)]
             rel = [r.name for r in mem.related(person.id)]
             if rel:
                 lines.append("susiję: " + ", ".join(rel))
@@ -100,7 +101,29 @@ async def handle_command(name: str, args: str, sender_id: int, now: float, ctx: 
         if profile:
             lines.append(profile)
         lines += [f"#{f.id} {f.text}" for f in mem.facts_about(uid)]
+        for p in mem.people():
+            if p.user_id == uid:
+                lines += [f"ryšys: {r}" for r in mem.relations(p.id)]
         return "\n".join(lines) if len(lines) > 1 else "apie ji nieko nezinau"
+
+    if name == "rysys":
+        if not args:
+            rels = mem.relations()
+            return "\n".join(f"#{r.id} {r}" for r in rels) if rels else "ryšių dar nėra"
+        if args.lower().startswith("trink"):
+            rid = _int(args[5:])
+            if rid is None:
+                return "naudok: /rysys trink <nr>"
+            return f"ištryniau ryšį #{rid}" if mem.delete_relation(rid) else f"ryšio #{rid} nėra"
+        parts = [s.strip() for s in re.split(r"[>|]", args)]
+        if len(parts) != 3 or not all(parts):
+            return "naudok: /rysys Vardas > kas jis yra > Kitas vardas (pvz. /rysys Jonas > darbdavys > Petras)"
+        if looks_like_instruction(parts[1]) or len(parts[1]) > 60:
+            return "toks ryšys neina"
+        rid = mem.add_relation(parts[0], parts[1], parts[2], f"cmd:{sender_id}")
+        if rid is None:
+            return "vieno iš jų nepažįstu, pirma pridėk per /zmogus"
+        return f"ok #{rid}: {next(r for r in mem.relations() if r.id == rid)}"
 
     if name == "zmogus":
         who, sep, aliases = args.partition("=")

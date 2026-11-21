@@ -98,3 +98,53 @@ async def test_learning_names_the_person_when_fact_has_no_subject():
     await learn_once(m, FakeLLM([raw]), -100)
     fact = m.all_facts()[0]
     assert fact.text.startswith("Jonas") and sorted(p.name for p in m.people_of_fact(fact.id)) == ["Jonas", "Petras"]
+
+
+async def test_explicit_relation_resolves_word_forms_and_dedupes():
+    m = mem()
+    rid = m.add_relation("joną", "darbdavys", "petro", "cmd:1")
+    assert rid is not None and m.add_relation("Jonas", "darbdavys", "Petras", "cmd:1") == rid
+    [r] = m.relations()
+    assert (r.a.name, r.rel, r.b.name) == ("Jonas", "darbdavys", "Petras")
+    assert m.add_relation("Nežinomas", "draugas", "Petras", "cmd:1") is None
+
+
+async def test_relations_of_person_and_delete():
+    m = mem()
+    r1 = m.add_relation("Jonas", "darbdavys", "Petras", "cmd:1")
+    m.add_relation("Mikas", "draugas", "Jonas", "cmd:1")
+    petras = m.find_person("petras")
+    assert [r.id for r in m.relations(petras.id)] == [r1]
+    assert m.delete_relation(r1) and not m.delete_relation(r1)
+    assert m.relations(petras.id) == []
+
+
+async def test_people_lines_show_explicit_relations_even_without_facts():
+    m = mem()
+    m.add_relation("Jonas", "darbdavys", "Petras", "cmd:1")
+    await m.add_fact("fact", "mikas petro draugas", None, "cmd:1")
+    lines = m.people_lines()
+    jonas = next(l for l in lines if l.startswith("Jonas"))
+    petras = next(l for l in lines if l.startswith("Petras"))
+    assert "Jonas – darbdavys → Petras" in jonas and "Jonas – darbdavys → Petras" in petras
+    assert "Susiję: Mikas" in petras  # co-mentioned only, not already an explicit relation
+
+
+async def test_rysys_command(app):
+    bot, store, _, out = await app()
+    bot.memory.add_person("Petras", ["petro"])
+    bot.memory.add_person("Jonas", ["jono"])
+    admin = bot.cfg.telegram.admin_id
+    await bot.on_message(inc("/rysys Jonas > darbdavys > Petras"))
+    assert out.sent[-1][1] == "tik bosas gali"
+    await bot.on_message(inc("/rysys Jonas > darbdavys > Petras", msg_id=2, user=admin))
+    assert "Jonas – darbdavys → Petras" in out.sent[-1][1]
+    await bot.on_message(inc("/rysys Jonas > draugas > Niekas", msg_id=3, user=admin))
+    assert "nepažįstu" in out.sent[-1][1]
+    await bot.on_message(inc("/rysys", msg_id=4, user=admin))
+    rid = bot.memory.relations()[0].id
+    assert f"#{rid} Jonas – darbdavys → Petras" in out.sent[-1][1]
+    await bot.on_message(inc("/ka_zinai petro", msg_id=5))
+    assert "Jonas – darbdavys → Petras" in out.sent[-1][1]
+    await bot.on_message(inc(f"/rysys trink {rid}", msg_id=6, user=admin))
+    assert bot.memory.relations() == []
