@@ -8,8 +8,9 @@ from dataclasses import dataclass, field
 from .chunking import render_line
 from .guard import leaks_prompt
 from .trigger import fold
-from .llm import LLM
+from .llm import LLM, chat_ex
 from .store import StoredMessage
+from .trace import NULL_RUN, TraceRun
 
 log = logging.getLogger(__name__)
 
@@ -161,37 +162,79 @@ def is_repeat(line: str, recent_own: list[str] | tuple[str, ...], threshold: flo
     return False
 
 
+@dataclass
+class ReplyResult:
+    texts: list[str] | None
+    fallback: bool = False  # sent from a fallback path (stray script stripped, or the less misspelled attempt)
+
+
+def _check(name: str, ok: bool, reason: str = "") -> dict:
+    return {"name": name, "ok": ok, "reason": reason}
+
+
 async def generate_reply(llm: LLM, ctx: PromptContext, *, num_predict: int, max_chars: int,
                          member_names: list[str], speller=None,
-                         recent_own: list[str] | tuple[str, ...] = ()) -> list[str] | None:
-    messages = build_prompt(ctx, max_chars=max_chars)
+                         recent_own: list[str] | tuple[str, ...] = (), run: TraceRun = NULL_RUN) -> list[str] | None:
+    return (await generate_reply_ex(llm, ctx, num_predict=num_predict, max_chars=max_chars,
+                                    member_names=member_names, speller=speller, recent_own=recent_own,
+                                    run=run)).texts
+
+
+async def generate_reply_ex(llm: LLM, ctx: PromptContext, *, num_predict: int, max_chars: int,
+                            member_names: list[str], speller=None,
+                            recent_own: list[str] | tuple[str, ...] = (), run: TraceRun = NULL_RUN) -> ReplyResult:
+    with run.step("prompt") as st:
+        messages = build_prompt(ctx, max_chars=max_chars)
+        st.detail.update(prompt_sections(ctx))
+        st.detail["history"] = len(messages[1]["content"])
+        st.detail["approx_tokens"] = sum(len(m["content"]) for m in messages) // 4
+        st.prompt = messages[0]["content"] + "\n\n" + messages[1]["content"]
     if ctx.serious:
         num_predict = max(num_predict, SERIOUS_NUM_PREDICT)
     max_lines = SERIOUS_MAX_LINES if ctx.serious else MAX_LINES
     fallback: list[str] | None = None
     misspelled: list[tuple[int, int, list[str]]] = []  # (unknown words, attempt, texts)
     for attempt in range(2):
+        label = f"attempt {attempt + 1}"
         try:
-            texts = clean_reply(await llm.chat(messages, num_predict=num_predict), member_names, max_lines)
+            with run.step("generation", label) as st:
+                res = await chat_ex(llm, messages, num_predict=num_predict)
+                st.detail.update(res.stats)
+                st.detail["raw"] = res.text
         except Exception as e:  # model down, timeout, bad response
             log.warning("generation failed (attempt %d): %s", attempt + 1, e)
             continue
+        texts = clean_reply(res.text, member_names, max_lines)
+        checks = [_check("empty", bool(texts), "" if texts else "nothing left after cleanup")]
+        verdict = None
         if texts and leaks_prompt(" ".join(texts), ctx.persona):
             log.warning("reply repeated the persona text; regenerating")
-            continue
-        texts = [t for t in texts if not is_repeat(t, recent_own)]  # never send the same line twice
-        if not texts:
-            continue
-        if texts and any(has_foreign_script(t) for t in texts):
-            fallback = strip_foreign(texts) or fallback  # model glitch: stray Hindi/Arabic/Turkish words
-            continue
-        unknown = speller.unknown(texts) if speller else []
-        if unknown:
-            log.info("invented words %s; regenerating", unknown)
-            misspelled.append((len(unknown), attempt, texts))
-            continue
-        if texts:
-            return texts
+            checks.append(_check("leak", False, "repeats the persona text"))
+            verdict = "rejected"
+        elif texts:
+            checks.append(_check("leak", True))
+            repeats = [t for t in texts if is_repeat(t, recent_own)]
+            texts = [t for t in texts if t not in repeats]  # never send the same line twice
+            checks.append(_check("repeat", not repeats, "; ".join(repeats)))
+            if not texts:
+                verdict = "rejected"
+            elif any(has_foreign_script(t) for t in texts):
+                fallback = strip_foreign(texts) or fallback  # model glitch: stray Hindi/Arabic/Turkish words
+                checks.append(_check("foreign", False, "foreign script"))
+                verdict = "rejected"
+            else:
+                checks.append(_check("foreign", True))
+                unknown = speller.unknown(texts) if speller else []
+                checks.append(_check("spelling", not unknown, ", ".join(unknown)))
+                if unknown:
+                    log.info("invented words %s; regenerating", unknown)
+                    misspelled.append((len(unknown), attempt, texts))
+                    verdict = "rejected"
+        else:
+            verdict = "rejected"
+        run.add_step("filter", name=label, status=verdict or "ok", detail={"checks": checks})
+        if verdict is None:
+            return ReplyResult(texts)
     if misspelled:  # both attempts had odd words: send the cleaner one rather than nothing
-        return min(misspelled)[2]
-    return fallback or None
+        return ReplyResult(min(misspelled)[2], fallback=True)
+    return ReplyResult(fallback, fallback=True) if fallback else ReplyResult(None)

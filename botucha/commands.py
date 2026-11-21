@@ -138,6 +138,7 @@ async def handle_command(name: str, args: str, sender_id: int, now: float, ctx: 
         if minutes is None or minutes < 0:
             return "naudok: /tyla [minutes]"
         ctx.state.quiet_until = now + minutes * 60
+        store.set_state("quiet_until", str(ctx.state.quiet_until))
         return f"ok, tyliu {minutes} min"
 
     if name == "pamirsk":

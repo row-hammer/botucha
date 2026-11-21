@@ -19,6 +19,7 @@ from .memory import Memory
 from .prices import PriceClient
 from .spell import Speller
 from .store import Store
+from .trace import Tracer
 
 log = logging.getLogger("botucha")
 
@@ -89,7 +90,7 @@ async def main(config_path: Path) -> None:
     me = await tg.get_me()
     log.info("logged in as @%s (%d)", me.username, me.id)
     app = Botucha(cfg, store, memory, OllamaLLM(cfg.model), AiogramOutbox(tg), rng=random.Random(),
-                  bot_user_id=me.id, bot_username=me.username or "", prices=PriceClient())
+                  bot_user_id=me.id, bot_username=me.username or "", prices=PriceClient(), tracer=Tracer(store))
     app.speller = Speller(Path(__file__).resolve().parent.parent / "data" / "hunspell" / "lt", vocab=app.vocabulary)
     dp = Dispatcher()
 
@@ -113,7 +114,8 @@ async def main(config_path: Path) -> None:
             log.exception("bootstrap failed; it will retry on next start")
 
     tasks = [asyncio.create_task(app.worker.run()), asyncio.create_task(app.learn_loop()),
-             asyncio.create_task(bootstrap())]
+             asyncio.create_task(bootstrap()), asyncio.create_task(app.state_loop()),
+             asyncio.create_task(app.maintenance_loop())]
     try:
         await dp.start_polling(tg, allowed_updates=["message", "edited_message", "message_reaction"])
     finally:

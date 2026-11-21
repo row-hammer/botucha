@@ -6,9 +6,10 @@ import logging
 from dataclasses import dataclass
 
 from .guard import MAX_FACT_CHARS, MAX_SLANG_CHARS, looks_like_instruction
-from .llm import LLM
+from .llm import LLM, chat_ex
 from .memory import Memory
 from .store import Store
+from .trace import NULL_RUN, TraceRun
 
 log = logging.getLogger(__name__)
 
@@ -61,7 +62,7 @@ def resolve_member(about: str | None, store: Store) -> int | None:
 
 
 async def learn_once(memory: Memory, llm: LLM, chat_id: int, *, source: str = "auto",
-                     locked: frozenset[int] = frozenset()) -> int:
+                     locked: frozenset[int] = frozenset(), run: TraceRun = NULL_RUN) -> int:
     key = f"learn_cursor:{chat_id}"
     cursor = int(memory.store.get_state(key, "0"))
     new = memory.chunks_after(chat_id, cursor)
@@ -70,30 +71,51 @@ async def learn_once(memory: Memory, llm: LLM, chat_id: int, *, source: str = "a
     # Botucha's own lines are not the group's language: learning from them would feed his jokes back to him.
     text = "\n---\n".join("\n".join(l for l in c.text.splitlines() if not l.startswith(BOT_LINE_PREFIX))
                           for _, c in new)
-    raw = await llm.chat([{"role": "system", "content": EXTRACT_PROMPT}, {"role": "user", "content": text}],
-                         num_predict=800, fmt_json=True)
-    ext = parse_extraction(raw)
+    with run.step("extract") as st:
+        res = await chat_ex(llm, [{"role": "system", "content": EXTRACT_PROMPT}, {"role": "user", "content": text}],
+                            num_predict=800, fmt_json=True)
+        raw = res.text
+        st.detail.update(res.stats)
+        st.detail.update(chunks=len(new), raw=raw[:500])
+        ext = parse_extraction(raw)
+        if ext is None:
+            st.status = "rejected"
+            st.detail["error"] = "invalid JSON"
     if ext is None:
         log.warning("learning: model returned invalid JSON, skipping this run")
         return 0
     n = 0
+    facts_added: list[str] = []
+    facts_rejected: list[dict] = []
     for about, fact in ext.facts:
         if len(fact) > MAX_FACT_CHARS or looks_like_instruction(fact):
             log.warning("learning: skipped instruction-like fact: %.80s", fact)
+            facts_rejected.append({"text": fact[:200],
+                                   "reason": "too_long" if len(fact) > MAX_FACT_CHARS else "instruction"})
             continue
         uid = resolve_member(about, memory.store)
         person = memory.find_person(about) if about and uid is None else None
         if person and person.id not in {p.id for p in memory.people_in(fact)}:
             fact = f"{person.name} – {fact[:1].lower()}{fact[1:]}"  # keep who it is about inside the text
         if uid in locked:
+            facts_rejected.append({"text": fact[:200], "reason": "locked"})
             continue  # owner keeps this member's memory by hand
         await memory.upsert_fact("fact", fact, uid, source)
+        facts_added.append(fact)
         n += 1
+    run.add_step("facts", detail={"added": facts_added, "rejected": facts_rejected})
+    slang_added: list[str] = []
+    slang_rejected: list[dict] = []
     for word, meaning in ext.slang:
+        entry = f"{word.lower()} = {meaning}"
         if len(word) + len(meaning) > MAX_SLANG_CHARS or looks_like_instruction(f"{word} {meaning}"):
+            slang_rejected.append({"text": entry[:200], "reason": "too_long" if len(word) + len(meaning) >
+                                   MAX_SLANG_CHARS else "instruction"})
             continue
-        await memory.upsert_fact("slang", f"{word.lower()} = {meaning}", None, source)
+        await memory.upsert_fact("slang", entry, None, source)
+        slang_added.append(entry)
         n += 1
+    run.add_step("slang", detail={"added": slang_added, "rejected": slang_rejected})
     memory.store.set_state(key, str(new[-1][0]))
     return n
 

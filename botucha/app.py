@@ -12,7 +12,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Protocol
 
-from .brain import PromptContext, generate_reply
+from .brain import PromptContext, generate_reply_ex
 from .commands import CommandContext, handle_command, load_trigger_state, message_link, parse_command
 from .config import Config
 from .export_import import import_export, parse_export
@@ -22,7 +22,8 @@ from .learn import learn_once, profiles_due, refresh_profiles, should_learn
 from .llm import LLM
 from .memory import Memory
 from .store import Store, StoredMessage
-from .trigger import Decision, decide, fold, is_direct, is_recall, mark_unsolicited
+from .trace import NULL_RUN, Tracer, prune_traces
+from .trigger import Decision, decide_with_reason, fold, is_direct, is_recall, mark_unsolicited
 from .worker import Job, ReplyWorker
 
 log = logging.getLogger(__name__)
@@ -77,13 +78,17 @@ class Botucha:
     def __init__(self, cfg: Config, store: Store, memory: Memory, llm: LLM, outbox: Outbox, *,
                  rng: random.Random, clock: Callable[[], float] = time.time, bot_user_id: int,
                  bot_username: str, sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
-                 started_at: float | None = None, prices: PriceClient | None = None):
+                 started_at: float | None = None, prices: PriceClient | None = None,
+                 tracer: Tracer | None = None):
         self.cfg, self.store, self.memory, self.llm, self.outbox = cfg, store, memory, llm, outbox
         self.rng, self.clock, self.sleep = rng, clock, sleep
         self.bot_user_id, self.bot_username = bot_user_id, bot_username
         self.started_at = started_at if started_at is not None else clock()
         self.state = load_trigger_state(store, cfg.trigger)
-        self.last_error: str | None = None
+        self.state.quiet_until = float(store.get_state("quiet_until", "0") or 0)
+        self.tracer = tracer
+        self._last_error: str | None = None
+        store.set_state("bot_started_at", str(self.started_at))
         self._ignored_chats: set[int] = set()
         self._locked = frozenset(cfg.memory.locked_members)
         self.prices = prices if cfg.prices.enabled else None
@@ -93,6 +98,41 @@ class Botucha:
         self._bg_lock = asyncio.Lock()  # bootstrap and learning never overlap
         self.worker = ReplyWorker(self.run_job, quiet_s=cfg.trigger.burst_quiet_s,
                                   max_wait_s=cfg.trigger.burst_max_s)
+
+    @property
+    def last_error(self) -> str | None:
+        return self._last_error
+
+    @last_error.setter
+    def last_error(self, value: str | None) -> None:
+        self._last_error = value
+        try:
+            self.store.set_state("last_error", value or "")
+        except Exception as e:
+            log.warning("cannot store last error: %s", e)
+
+    def sync_state(self) -> None:
+        """Pick up on/off, frequency and quiet time written by the web dashboard."""
+        g = self.store.get_state
+        self.state.enabled = g("enabled", "1") == "1"
+        self.state.random_n = int(g("random_n", str(self.state.random_n)) or self.state.random_n)
+        self.state.quiet_until = float(g("quiet_until", "0") or 0)
+
+    async def state_loop(self, every_s: float = 5.0) -> None:
+        while True:
+            await asyncio.sleep(every_s)
+            try:
+                self.sync_state()
+            except Exception as e:
+                log.warning("state sync failed: %s", e)
+
+    async def maintenance_loop(self, every_s: float = 3600.0) -> None:
+        while True:
+            try:
+                prune_traces(self.store, self.clock())
+            except Exception as e:
+                log.warning("trace cleanup failed: %s", e)
+            await asyncio.sleep(every_s)
 
     # ---- incoming --------------------------------------------------------
     async def on_message(self, m: Incoming) -> None:
@@ -127,7 +167,8 @@ class Botucha:
                 name, args = parsed
                 if name in ("rimtai", "atsimeni") and m.ts >= self.started_at and self.state.enabled:
                     self.worker.submit(ReplyJob(m.chat_id, m.msg_id, direct=True, serious=name == "rimtai",
-                                                recall=name == "atsimeni", links=name == "atsimeni"))
+                                                recall=name == "atsimeni", links=name == "atsimeni",
+                                                trigger="serious" if name == "rimtai" else "recall"))
                     return
                 if name == "kaina":
                     await self._command_price(m, args)
@@ -157,8 +198,9 @@ class Botucha:
         direct = m.chat_id > 0 or is_direct(  # positive chat id = private chat: always talking to him
             m.text, reply_to_bot=m.reply_to_bot, mentions_bot=m.mentions_bot,
             name_regex=self.cfg.telegram.bot_name_regex)
-        decision = decide(m.text, sender_is_bot=own, direct=direct, started_at=self.started_at, msg_ts=m.ts,
-                          now=now, state=self.state, cfg=self.cfg.trigger, rng=self.rng)
+        decision, reason = decide_with_reason(m.text, sender_is_bot=own, direct=direct, started_at=self.started_at,
+                                              msg_ts=m.ts, now=now, state=self.state, cfg=self.cfg.trigger,
+                                              rng=self.rng)
         if decision is Decision.REPLY and direct and self._over_limit(m.user_id, now):
             calls = self._calls[m.user_id]
             if len(calls) == self.cfg.trigger.user_calls_per_min + 1:  # react once per flood
@@ -171,7 +213,8 @@ class Botucha:
             if not direct:
                 mark_unsolicited(self.state, now)
             self.worker.submit(ReplyJob(m.chat_id, m.msg_id, direct=direct,
-                                        serious=direct and "rimtai" in fold(m.text), recall=is_recall(m.text)))
+                                        serious=direct and "rimtai" in fold(m.text), recall=is_recall(m.text),
+                                        trigger=reason))
         elif decision is Decision.REACT:
             mark_unsolicited(self.state, now)
             try:
@@ -272,42 +315,71 @@ class Botucha:
         direct = [j for j in jobs if j.direct]
         recall = any(j.recall for j in jobs)
         links = any(getattr(j, "links", False) for j in jobs)
+        last = self.store.get_message(chat_id, jobs[-1].msg_id)
+        trigger = "+".join(dict.fromkeys(j.trigger for j in jobs if j.trigger))
+        run = (self.tracer.start("reply", chat_id=chat_id, msg_id=jobs[-1].msg_id,
+                                 user_name=last.name if last else None, trigger=trigger)
+               if self.tracer else NULL_RUN)
+        result, hits = None, []
         try:
             await self.memory.index_new_chunks(chat_id)
             ids = {j.msg_id for j in jobs}
-            # commands are not conversation, except the /rimtai or /atsimeni being answered right now
-            history = self._trim_own([m for m in self.store.recent_messages(chat_id, HISTORY_N)
-                                      if not m.text.startswith("/") or m.msg_id in ids])
+            with run.step("context") as st:
+                recent = self.store.recent_messages(chat_id, HISTORY_N)
+                # commands are not conversation, except the /rimtai or /atsimeni being answered right now
+                convo = [m for m in recent if not m.text.startswith("/") or m.msg_id in ids]
+                history = self._trim_own(convo)
+                st.detail.update(history=len(history), own_dropped=len(convo) - len(history))
             query = "\n".join(m.text for m in history if m.msg_id in ids) or (history[-1].text if history else "")
-            hits = await self.memory.search_chunks(query, k=6 if recall else 3, chat_id=chat_id)
-            facts = await self.memory.search_facts(query, k=5)
+            with run.step("retrieval") as st:
+                hits = await self.memory.search_chunks(query, k=6 if recall else 3, chat_id=chat_id)
+                scored = await self.memory.search_facts_scored(query, k=5)
+                facts = [f for f, _, _ in scored]
+                prices = [format_quote(q) for q in await self.prices.quotes(detect_symbols(query, self.aliases))] \
+                    if self.prices else []
+                st.detail.update(
+                    query=query[:300],
+                    chunks=[{"first_msg_id": h.chunk.first_msg_id, "preview": h.chunk.text[:120],
+                             "score": round(h.score, 4), "fts": h.fts} for h in hits],
+                    facts=[{"id": f.id, "preview": f.text[:120], "score": round(sc, 4), "fts": fts}
+                           for f, sc, fts in scored],
+                    prices=prices)
             members = self.store.members()
             ctx = PromptContext(
                 persona=_read(self.cfg.paths.persona), style_examples=_read(self.cfg.paths.style_examples),
                 profiles={members[u].name: p for u, p in self.memory.profiles().items() if u in members},
                 slang=self.memory.all_slang(), people=self.memory.people_lines(),
                 chunks=[h.chunk.text for h in hits], facts=[f.text for f in facts], history=history,
-                bot_user_id=self.bot_user_id, serious=any(j.serious for j in jobs))
-            if self.prices:
-                ctx.prices = [format_quote(q) for q in await self.prices.quotes(detect_symbols(query, self.aliases))]
+                bot_user_id=self.bot_user_id, serious=any(j.serious for j in jobs), prices=prices)
             await self.outbox.typing(chat_id)
-            texts = await generate_reply(self.llm, ctx, num_predict=self.cfg.model.num_predict,
-                                         max_chars=self.cfg.model.num_ctx * 3, member_names=self._member_names(),
-                                         speller=self.speller, recent_own=self._recent_own(chat_id))
+            result = await generate_reply_ex(self.llm, ctx, num_predict=self.cfg.model.num_predict,
+                                             max_chars=self.cfg.model.num_ctx * 3,
+                                             member_names=self._member_names(), speller=self.speller,
+                                             recent_own=self._recent_own(chat_id), run=run)
         except Exception as e:
             log.exception("reply preparation failed")
             self.last_error = f"{type(e).__name__}: {e}"
-            texts = None
+            run.finish("error", error=self.last_error)
+            if direct:
+                await self._send(chat_id, [CANNED], direct[-1].msg_id, store=False)
+            return
+        texts = result.texts
         if texts is None:
             self.last_error = self.last_error or "model returned nothing"
+            run.finish("canned" if direct else "skipped", error=self.last_error)
             if direct:
                 await self._send(chat_id, [CANNED], direct[-1].msg_id, store=False)
             return
         if links and hits:
             texts = texts + [" ".join(message_link(h.chunk.chat_id, h.chunk.first_msg_id) for h in hits[:3])]
-        await self._send(chat_id, texts, direct[-1].msg_id if direct else None, store=True)
+        with run.step("send") as st:
+            sent = await self._send(chat_id, texts, direct[-1].msg_id if direct else None, store=True)
+            st.detail["msg_ids"] = sent
+        run.finish("fallback" if result.fallback else "sent", reply="\n".join(texts),
+                   sent=[(chat_id, mid) for mid in sent])
 
-    async def _send(self, chat_id: int, texts: list[str], reply_to: int | None, *, store: bool) -> None:
+    async def _send(self, chat_id: int, texts: list[str], reply_to: int | None, *, store: bool) -> list[int]:
+        out: list[int] = []
         for i, text in enumerate(texts):
             if i:
                 await self.outbox.typing(chat_id)
@@ -317,11 +389,13 @@ class Botucha:
             except Exception as e:
                 log.warning("send failed: %s", e)
                 self.last_error = f"send: {e}"
-                return
+                return out
+            out.extend(sent)
             if store and not text.startswith("https://t.me/"):
                 for mid in sent:
                     self.store.add_message(StoredMessage(chat_id, mid, self.bot_user_id, BOT_NAME, self.clock(),
                                                          text, None, True))
+        return out
 
     # ---- background ------------------------------------------------------
     async def learn_tick(self) -> None:
@@ -343,7 +417,13 @@ class Botucha:
                                 reply_pending=self.worker.pending):
                 continue
             await self.memory.index_new_chunks(chat_id, force=True)
-            await learn_once(self.memory, self.llm, chat_id, locked=self._locked)
+            run = self.tracer.start("learn", chat_id=chat_id, trigger="idle") if self.tracer else NULL_RUN
+            try:
+                n = await learn_once(self.memory, self.llm, chat_id, locked=self._locked, run=run)
+            except Exception as e:
+                run.finish("error", error=f"{type(e).__name__}: {e}")
+                raise
+            run.finish("sent" if n else "skipped", reply=f"{n} new")
             self.store.set_state(key, str(self.store.last_rowid(chat_id)))
             if profiles_due(self.store, chat_id):
                 await refresh_profiles(self.memory, self.llm, self.store, chat_id, locked=self._locked)
