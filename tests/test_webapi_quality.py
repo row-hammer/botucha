@@ -40,7 +40,8 @@ def test_flagged_words_ranked_with_last_trace(store):
     reply(store, flagged=[("glichiuoja", "nusibudai")], started=NOW - 900)
     last = reply(store, flagged=[("Glichiuoja",), ("glichiuoja",)], outcome="fallback", started=NOW - 300)
     q = compute_quality(store, NOW, "24h", num_ctx=32768, tz=UTC)
-    assert q["words"][0] == {"word": "glichiuoja", "n": 3, "traces": 2, "last": NOW - 300, "trace_id": last}
+    assert q["words"][0] == {"word": "glichiuoja", "n": 3, "traces": 2, "last": NOW - 300, "trace_id": last,
+                          "claude": None, "known": False}
     assert q["words"][1]["word"] == "nusibudai" and q["words"][1]["n"] == 1
 
 

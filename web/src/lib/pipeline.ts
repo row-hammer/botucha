@@ -5,11 +5,12 @@ export const MAX_ATTEMPTS = 2; // botucha/brain.py tries the model twice
 export const LIVE_STAGES = ["context", "retrieval", "prompt", "generation", "filter", "send"] as const;
 export type LiveStage = (typeof LIVE_STAGES)[number];
 
-export type NodeKind = "trigger" | "ok" | "warn" | "bad" | "muted";
+export type NodeKind = "trigger" | "ok" | "claude" | "warn" | "bad" | "muted";
 
 const stageRank = (id: string) => {
   if (id.startsWith("trigger:")) return 0;
   if (id.startsWith("out:")) return 99;
+  if (id.startsWith("claude:")) return 1.5; // proofreading runs between attempt 1 and 2
   const m = /^a(\d+):/.exec(id);
   return m ? Number(m[1]) : 50;
 };
@@ -18,12 +19,13 @@ export function nodeKind(id: string): NodeKind {
   const [stage, what] = id.split(":");
   if (stage === "trigger") return "trigger";
   if (stage === "out") return what === "sent" ? "ok" : what === "fallback" ? "warn" : "muted";
+  if (stage === "claude") return what === "ok" ? "claude" : what === "error" ? "warn" : "bad";
   if (what === "ok") return "ok";
   if (what === "error") return "warn";
   return "bad";
 }
 
-const severity: Record<NodeKind, number> = { trigger: 0, ok: 1, warn: 2, bad: 3, muted: 4 };
+const severity: Record<NodeKind, number> = { trigger: 0, ok: 1, claude: 1, warn: 2, bad: 3, muted: 4 };
 
 /** Recharts Sankey wants nodes as an array and links by index. Order: stage, then passes before failures. */
 export function toSankey(p: Pick<Pipeline, "nodes" | "links">) {
@@ -57,6 +59,8 @@ export function liveStage(last: Progress["last"]): { stage: LiveStage; attempt: 
       return { stage: "prompt", attempt: 1 };
     case "prompt":
       return { stage: "generation", attempt: 1 };
+    case "proofread":
+      return { stage: "filter", attempt };
     case "generation":
       return last.status === "error" ? next(true) : { stage: "filter", attempt };
     case "filter":

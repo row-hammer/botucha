@@ -43,6 +43,7 @@
   --color-ok: var(--ok);
   --color-bad: var(--bad);
   --color-warn: var(--warn);
+  --color-claude: var(--claude);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -88,6 +89,7 @@
   --chart-4: oklch(0.6 0.22 20);
   --chart-5: oklch(0.6 0.18 303);
   --ok: oklch(0.6 0.15 162);
+  --claude: oklch(0.6 0.13 40);
   --bad: oklch(0.6 0.22 25);
   --warn: oklch(0.72 0.17 60);
   --sidebar: oklch(0.985 0 0);
@@ -125,6 +127,7 @@
   --chart-4: oklch(0.67 0.22 20);
   --chart-5: oklch(0.65 0.2 303);
   --ok: oklch(0.7 0.15 162);
+  --claude: oklch(0.7 0.13 40);
   --bad: oklch(0.67 0.2 25);
   --warn: oklch(0.78 0.16 70);
   --sidebar: oklch(0.205 0 0);

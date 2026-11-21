@@ -19,6 +19,7 @@ from .embed import OllamaEmbedder
 from .llm import OllamaLLM
 from .memory import Memory
 from .prices import PriceClient
+from .proofread import ClaudeProofreader
 from .spell import Speller
 from .store import Store
 from .trace import Tracer
@@ -120,6 +121,12 @@ async def main(config_path: Path) -> None:
                   bot_user_id=me.id, bot_username=me.username or "", prices=PriceClient(), tracer=Tracer(store))
     app.vision_check = llm.has_vision
     app.speller = Speller(Path(__file__).resolve().parent.parent / "data" / "hunspell" / "lt", vocab=app.vocabulary)
+    if cfg.claude.enabled:
+        app.proofreader = ClaudeProofreader(cfg.claude, store, api_key=env.get("ANTHROPIC_API_KEY", "").strip() or None)
+        st = app.proofreader.status()
+        log.info("claude proofreading: %s (%s, until %s, %d/%d calls today)",
+                 "on" if st["allowed"] else f"off, {st['reason']}", cfg.claude.model, st["until"] or "no end date",
+                 st["calls_today"], st["daily_limit"])
     dp = Dispatcher()
 
     @dp.message()

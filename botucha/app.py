@@ -24,6 +24,7 @@ from .commands import CommandContext, handle_command, load_trigger_state, messag
 from .config import Config
 from .export_import import import_export, parse_export
 from .feedback import score_for_reactions
+from .proofread import known_words, spelling_notes
 from .prices import DEFAULT_ALIASES, PriceClient, detect_symbols, format_quote
 from .learn import learn_once, profiles_due, refresh_profiles, should_learn
 from .llm import LLM
@@ -106,6 +107,7 @@ class Botucha:
         self._locked = frozenset(cfg.memory.locked_members)
         self.prices = prices if cfg.prices.enabled else None
         self.speller = None  # set by __main__: Speller(dict, vocab=self.vocabulary)
+        self.proofreader = None  # set by __main__ when [claude] is configured: ClaudeProofreader
         self.aliases = {**DEFAULT_ALIASES, **dict(cfg.prices.aliases)}
         self._calls: dict[int, deque[float]] = defaultdict(deque)
         self._bg_lock = asyncio.Lock()  # bootstrap and learning never overlap
@@ -327,6 +329,7 @@ class Botucha:
         for mem in self.store.members().values():
             words.update(w.lower() for w in re.findall(r"[^\W\d_]+", f"{mem.name} {mem.username or ''}"))
         words.update({"botucha", "botuchos", "xd", "xdd", "xddd", "xdddd"})
+        words.update(known_words(self.store))  # approved on the dashboard (e.g. slang Claude judged real)
         return words
 
     def _member_names(self) -> list[str]:
@@ -389,12 +392,14 @@ class Botucha:
                 profiles={members[u].name: p for u, p in self.memory.profiles().items() if u in members},
                 slang=self.memory.all_slang(), people=self.memory.people_lines(),
                 chunks=[h.chunk.text for h in hits], facts=[f.text for f in facts], history=history,
-                bot_user_id=self.bot_user_id, serious=any(j.serious for j in jobs), prices=prices, image=image)
+                bot_user_id=self.bot_user_id, serious=any(j.serious for j in jobs), prices=prices, image=image,
+                spelling_notes=spelling_notes(self.store))
             await self.outbox.typing(chat_id)
             result = await generate_reply_ex(self.llm, ctx, num_predict=self.cfg.model.num_predict,
                                              max_chars=self.cfg.model.num_ctx * 3,
                                              member_names=self._member_names(), speller=self.speller,
-                                             recent_own=self._recent_own(chat_id), run=run)
+                                             recent_own=self._recent_own(chat_id), run=run,
+                                             proofread=self.proofreader)
         except Exception as e:
             log.exception("reply preparation failed")
             self.last_error = f"{type(e).__name__}: {e}"

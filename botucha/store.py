@@ -63,6 +63,11 @@ CREATE TABLE IF NOT EXISTS feedback (
     score INTEGER NOT NULL, reason TEXT, ts REAL NOT NULL,
     PRIMARY KEY (chat_id, msg_id, user_id)
 );
+CREATE TABLE IF NOT EXISTS spell_fixes (
+    id INTEGER PRIMARY KEY, ts REAL NOT NULL, word TEXT NOT NULL, verdict TEXT NOT NULL, fix TEXT, model TEXT
+);
+CREATE INDEX IF NOT EXISTS spell_fixes_word ON spell_fixes (word);
+CREATE TABLE IF NOT EXISTS known_words (word TEXT PRIMARY KEY, source TEXT NOT NULL, ts REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS corrections (
     chat_id INTEGER NOT NULL, msg_id INTEGER NOT NULL, user_id INTEGER NOT NULL,
     text TEXT NOT NULL, ts REAL NOT NULL,

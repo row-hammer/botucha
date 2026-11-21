@@ -367,7 +367,8 @@
       "gen1": "Generavimas 1",
       "gen2": "Generavimas 2 (pakartotinis)",
       "filter": "Filtrai",
-      "send": "Siuntimas"
+      "send": "Siuntimas",
+      "proof": "Claude"
     },
     "live": {
       "title": "Dabar",
@@ -380,7 +381,10 @@
       "passed": "{n} bandymas praėjo",
       "error": "{n} bandymas: modelio klaida",
       "rejected": "{n} bandymas: {check}",
-      "rejectedAny": "{n} bandymas: atmestas"
+      "rejectedAny": "{n} bandymas: atmestas",
+      "claudeOk": "Claude pataisė",
+      "claudeError": "Claude nepasiekiamas",
+      "claudeRejected": "Po Claude: {check}"
     }
   },
   "quality": {
@@ -391,7 +395,16 @@
       "word": "Žodis",
       "n": "Kartai",
       "replies": "Atsakymai",
-      "last": "Paskutinį kartą"
+      "last": "Paskutinį kartą",
+      "claude": "Claude sako",
+      "known": "Žinomas žodis",
+      "real": "tikras žodis",
+      "add": "Pridėti",
+      "isKnown": "žinomas",
+      "addHint": "Laikyti žinomu žodžiu: rašybos tikrinimas jo nebežymės.",
+      "removeHint": "Pašalinti iš žinomų žodžių",
+      "added": "„{word}“ pridėtas prie žinomų žodžių",
+      "removed": "„{word}“ pašalintas iš žinomų žodžių"
     },
     "context": {
       "title": "Konteksto lango užimtumas",
@@ -429,6 +442,24 @@
       "title": "Kada grupė aktyvi",
       "hint": "Narių žinutės pagal savaitės dieną ir valandą (šio kompiuterio laiko juosta).",
       "cell": "{day} {h}:00 · žinučių: {n}"
+    },
+    "claude": {
+      "title": "Claude rašybos tikrinimas",
+      "hint": "Kai rašybos tikrinimas pažymi žodžius juodraštyje, Claude įvertina tik tuos žodžius. Iš kompiuterio išeina tik juodraštis ir tie žodžiai.",
+      "on": "Įjungta: taiso pažymėtus juodraščius",
+      "switch": "Naudoti Claude",
+      "calls": "užklausų šiandien",
+      "until": "veikia iki",
+      "model": "modelis",
+      "reason": {
+        "disabled": "Išjungta: neįjungta config.toml",
+        "noKey": "Išjungta: .env nėra API rakto",
+        "ended": "Išjungta: bandomasis laikotarpis baigėsi",
+        "off": "Išjungta čia",
+        "limit": "Pristabdyta: pasiekta šiandienos užklausų riba"
+      },
+      "setupKey": "Į .env (šalia Telegram žetono) įrašykite ANTHROPIC_API_KEY=…, tada paleiskite botą iš naujo.",
+      "setupEnable": "config.toml skiltyje [claude] nustatykite enabled = true, tada paleiskite botą iš naujo."
     }
   }
 }

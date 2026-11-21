@@ -10,6 +10,7 @@ export const STAGE_COLORS: Record<StageKey, string> = {
   retrieval: "var(--chart-3)",
   prompt: "var(--muted-foreground)",
   gen1: "var(--chart-1)",
+  proof: "var(--claude)",
   gen2: "var(--chart-4)",
   filter: "var(--chart-2)",
   send: "var(--ok)",
@@ -39,7 +40,7 @@ export function StageChart({ data, tick }: { data: Pipeline["stages"]; tick: (ts
           labelFormatter={(l, p) => (p?.[0] ? `${l} · ${t("pipeline.replies", { n: p[0].payload.n })}` : String(l))}
         />
         <Legend wrapperStyle={{ fontSize: 12 }} />
-        {KEYS.map((k, i) => (
+        {KEYS.map((k) => (
           <Bar
             key={k}
             isAnimationActive={false}

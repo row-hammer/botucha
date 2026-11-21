@@ -34,6 +34,7 @@ class Deps:
     static_dir: Path | None
     clock: Callable[[], float] = time.time
     backups_dir: Path | None = None
+    claude_key: bool = False  # whether .env has ANTHROPIC_API_KEY (the key itself stays out of here)
 
 
 def create_app(deps: Deps, *, token: str | None = None, dev: bool = False, port: int = DEFAULT_PORT) -> FastAPI:
@@ -70,7 +71,7 @@ def create_app(deps: Deps, *, token: str | None = None, dev: bool = False, port:
 
     from . import routes_status
     app.include_router(routes_status.router)
-    for name in ("routes_traces", "routes_memory", "routes_ratings", "routes_control", "routes_settings"):
+    for name in ("routes_traces", "routes_memory", "routes_ratings", "routes_control", "routes_settings", "routes_claude"):
         try:
             module = __import__(f"{__package__}.{name}", fromlist=["router"])
         except ModuleNotFoundError:

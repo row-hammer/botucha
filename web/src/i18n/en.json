@@ -367,7 +367,8 @@
       "gen1": "Generation 1",
       "gen2": "Generation 2 (retry)",
       "filter": "Filters",
-      "send": "Send"
+      "send": "Send",
+      "proof": "Claude"
     },
     "live": {
       "title": "Right now",
@@ -380,7 +381,10 @@
       "passed": "Attempt {n} passed",
       "error": "Attempt {n}: model error",
       "rejected": "Attempt {n}: {check}",
-      "rejectedAny": "Attempt {n}: rejected"
+      "rejectedAny": "Attempt {n}: rejected",
+      "claudeOk": "Claude fixed it",
+      "claudeError": "Claude unavailable",
+      "claudeRejected": "After Claude: {check}"
     }
   },
   "quality": {
@@ -391,7 +395,16 @@
       "word": "Word",
       "n": "Times",
       "replies": "Replies",
-      "last": "Last seen"
+      "last": "Last seen",
+      "claude": "Claude says",
+      "known": "Known word",
+      "real": "real word",
+      "add": "Add",
+      "isKnown": "known",
+      "addHint": "Treat as a known word: the spell check stops flagging it.",
+      "removeHint": "Remove from known words",
+      "added": "“{word}” added to known words",
+      "removed": "“{word}” removed from known words"
     },
     "context": {
       "title": "Context window use",
@@ -429,6 +442,24 @@
       "title": "When the group is active",
       "hint": "Messages from members per weekday and hour (this PC's time zone).",
       "cell": "{day} {h}:00 · {n} messages"
+    },
+    "claude": {
+      "title": "Claude proofreading",
+      "hint": "When the spell check flags words in a draft, Claude judges just those words. Only the draft and the words leave this PC.",
+      "on": "On: fixes flagged drafts",
+      "switch": "Use Claude",
+      "calls": "calls today",
+      "until": "runs until",
+      "model": "model",
+      "reason": {
+        "disabled": "Off: not enabled in config.toml",
+        "noKey": "Off: no API key in .env",
+        "ended": "Off: the trial period has ended",
+        "off": "Off: switched off here",
+        "limit": "Paused: today's call limit reached"
+      },
+      "setupKey": "Add ANTHROPIC_API_KEY=… to .env (next to the Telegram token), then restart the bot.",
+      "setupEnable": "Set enabled = true under [claude] in config.toml, then restart the bot."
     }
   }
 }

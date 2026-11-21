@@ -3,13 +3,17 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { toast } from "sonner";
 import { ActivityHeatmap } from "@/components/activity-heatmap";
 import { ChartCard } from "@/components/chart-card";
+import { ClaudeCard } from "@/components/claude-card";
 import { PageHeader } from "@/components/page-header";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { api } from "@/lib/api";
+import { api, post } from "@/lib/api";
 import { fmtMs, fmtNum, fmtTime } from "@/lib/format";
 import { useLocale, useT } from "@/lib/i18n";
 import { onTrace } from "@/lib/live";
@@ -87,6 +91,16 @@ export default function QualityPage() {
     return onTrace(load);
   }, [load]);
 
+  const setKnown = async (word: string, known: boolean) => {
+    try {
+      await post("/api/known-words", { word, known });
+      toast.success(known ? t("quality.words.added", { word }) : t("quality.words.removed", { word }));
+      load();
+    } catch {
+      toast.error(t("common.loadFailed"));
+    }
+  };
+
   const attempts = Object.entries(q?.attempts ?? {}).map(([n, v]) => ({ name: t("quality.attempts.n", { n }), v }));
   const triggers = Object.entries(q?.triggers ?? {}).map(([k, v]) => ({
     name: ["keyword", "random", "unknown"].includes(k) ? t(`quality.triggers.${k}`) : t(`thinking.trigger.${k}`),
@@ -120,7 +134,7 @@ export default function QualityPage() {
               <CardTitle className="text-sm">{t("quality.words.title")}</CardTitle>
               <CardDescription className="text-xs">{t("quality.words.hint")}</CardDescription>
             </CardHeader>
-            <CardContent className="max-h-[420px] overflow-y-auto">
+            <CardContent className="max-h-[560px] overflow-y-auto">
               {!q ? (
                 <Empty text={t("common.loading")} />
               ) : q.words.length === 0 ? (
@@ -133,6 +147,8 @@ export default function QualityPage() {
                       <TableHead className="text-right">{t("quality.words.n")}</TableHead>
                       <TableHead className="hidden text-right sm:table-cell">{t("quality.words.replies")}</TableHead>
                       <TableHead className="text-right">{t("quality.words.last")}</TableHead>
+                      <TableHead>{t("quality.words.claude")}</TableHead>
+                      <TableHead className="text-right">{t("quality.words.known")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -146,6 +162,28 @@ export default function QualityPage() {
                             {fmtTime(w.last, locale)}
                           </Link>
                         </TableCell>
+                        <TableCell>
+                          {w.claude?.verdict === "fix" ? (
+                            <span className="text-claude">→ {w.claude.fix}</span>
+                          ) : w.claude?.verdict === "keep" ? (
+                            <Badge variant="outline" className="border-claude/40 text-claude">
+                              {t("quality.words.real")}
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground">–</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            size="sm"
+                            variant={w.known ? "secondary" : "outline"}
+                            className="h-7 px-2 text-xs"
+                            onClick={() => setKnown(w.word, !w.known)}
+                            title={w.known ? t("quality.words.removeHint") : t("quality.words.addHint")}
+                          >
+                            {w.known ? `✓ ${t("quality.words.isKnown")}` : t("quality.words.add")}
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -153,13 +191,16 @@ export default function QualityPage() {
               )}
             </CardContent>
           </Card>
-          <Card className="gap-2 xl:col-span-2">
-            <CardHeader>
-              <CardTitle className="text-sm">{t("quality.context.title")}</CardTitle>
-              <CardDescription className="text-xs">{t("quality.context.hint")}</CardDescription>
-            </CardHeader>
-            <CardContent>{q?.context.replies ? <ContextMeter c={q.context} /> : <Empty text={noData} />}</CardContent>
-          </Card>
+          <div className="flex flex-col gap-4 xl:col-span-2">
+            <ClaudeCard />
+            <Card className="gap-2">
+              <CardHeader>
+                <CardTitle className="text-sm">{t("quality.context.title")}</CardTitle>
+                <CardDescription className="text-xs">{t("quality.context.hint")}</CardDescription>
+              </CardHeader>
+              <CardContent>{q?.context.replies ? <ContextMeter c={q.context} /> : <Empty text={noData} />}</CardContent>
+            </Card>
+          </div>
         </div>
 
         <div className="grid gap-4 lg:grid-cols-2">

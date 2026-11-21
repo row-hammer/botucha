@@ -42,6 +42,24 @@ test("node kinds drive colour", () => {
   assert.equal(nodeKind("out:sent"), "ok");
   assert.equal(nodeKind("out:fallback"), "warn");
   assert.equal(nodeKind("out:skipped"), "muted");
+  assert.equal(nodeKind("claude:ok"), "claude");
+  assert.equal(nodeKind("claude:error"), "warn");
+  assert.equal(nodeKind("claude:spelling"), "bad");
+});
+
+test("claude sits between attempt 1 and attempt 2", () => {
+  const s = toSankey({
+    nodes: [
+      { id: "a2:ok", n: 1 },
+      { id: "claude:ok", n: 2 },
+      { id: "a1:spelling", n: 3 },
+    ],
+    links: [],
+  });
+  assert.deepEqual(
+    s.nodes.map((n) => n.name),
+    ["a1:spelling", "claude:ok", "a2:ok"],
+  );
 });
 
 test("empty pipeline gives an empty sankey", () => {
@@ -56,6 +74,9 @@ test("live stage: what the bot is doing after the last finished step", () => {
   assert.deepEqual(liveStage(last("filter", "attempt 1", "rejected")), { stage: "generation", attempt: 2 });
   assert.deepEqual(liveStage(last("generation", "attempt 2", "error")), { stage: "send", attempt: 2 });
   assert.deepEqual(liveStage(last("filter", "attempt 2", "ok")), { stage: "send", attempt: 2 });
+  assert.deepEqual(liveStage(last("proofread")), { stage: "filter", attempt: 1 });
+  assert.deepEqual(liveStage(last("filter", "proofread", "ok")), { stage: "send", attempt: 1 });
+  assert.deepEqual(liveStage(last("filter", "proofread", "rejected")), { stage: "generation", attempt: 2 });
 });
 
 test("percent with denominator, never NaN", () => {

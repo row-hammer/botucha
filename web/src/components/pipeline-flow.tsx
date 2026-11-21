@@ -10,6 +10,7 @@ import type { Pipeline } from "@/lib/types";
 const fill: Record<NodeKind, string> = {
   trigger: "var(--chart-1)",
   ok: "var(--ok)",
+  claude: "var(--claude)",
   warn: "var(--warn)",
   bad: "var(--bad)",
   muted: "var(--muted-foreground)",
@@ -24,6 +25,12 @@ export function useNodeLabel() {
     const rest = id.slice(stage.length + 1);
     if (stage === "trigger") return rest === "unknown" ? t("pipeline.node.unknown") : trig(rest);
     if (stage === "out") return t(`thinking.outcome.${what}`);
+    if (stage === "claude")
+      return what === "ok"
+        ? t("pipeline.node.claudeOk")
+        : what === "error"
+          ? t("pipeline.node.claudeError")
+          : t("pipeline.node.claudeRejected", { check: t(`checks.${what}`) });
     const n = stage.slice(1);
     if (what === "ok") return t("pipeline.node.passed", { n });
     if (what === "error") return t("pipeline.node.error", { n });

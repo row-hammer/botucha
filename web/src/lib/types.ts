@@ -105,7 +105,7 @@ export interface Rating {
   trace_id: number | null;
 }
 
-export type StageKey = "context" | "retrieval" | "prompt" | "gen1" | "gen2" | "filter" | "send";
+export type StageKey = "context" | "retrieval" | "prompt" | "gen1" | "proof" | "gen2" | "filter" | "send";
 
 export interface Pipeline {
   rates: {
@@ -143,7 +143,15 @@ export interface QualityPerson {
 }
 
 export interface Quality {
-  words: { word: string; n: number; traces: number; last: number; trace_id: number }[];
+  words: {
+    word: string;
+    n: number;
+    traces: number;
+    last: number;
+    trace_id: number;
+    claude: { verdict: "keep" | "fix"; fix: string | null } | null;
+    known: boolean;
+  }[];
   attempts: Record<string, number>;
   triggers: Record<string, number>;
   people: QualityPerson[];
@@ -158,4 +166,16 @@ export interface Quality {
     history: number | null;
   };
   activity: number[][]; // [weekday Mon=0][hour] -> messages
+}
+
+export interface ClaudeStatus {
+  allowed: boolean;
+  reason: "disabled in config" | "no API key" | "period ended" | "switched off" | "daily limit reached" | null;
+  enabled: boolean;
+  switch: boolean;
+  key: boolean;
+  until: string | null;
+  calls_today: number;
+  daily_limit: number;
+  model: string;
 }

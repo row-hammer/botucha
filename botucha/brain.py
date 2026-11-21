@@ -44,6 +44,7 @@ class PromptContext:
     prices: list[str] = field(default_factory=list)
     people: list[str] = field(default_factory=list)
     image: bytes | None = None  # the one photo he is looking at in this reply
+    spelling_notes: list[str] = field(default_factory=list)  # corrections learned from the proofreader
 
 
 def _system_parts(ctx: PromptContext) -> list[tuple[str, str]]:
@@ -55,6 +56,8 @@ def _system_parts(ctx: PromptContext) -> list[tuple[str, str]]:
         parts.append(("serious", SERIOUS_LINE))  # no style examples: they pull answers back to 5-word banter
     else:
         parts.append(("style", "Kaip grupe raso (tikri pavyzdziai):\n" + ctx.style_examples.strip()))
+    if ctx.spelling_notes:
+        parts.append(("spelling", "Rašybos pastabos (rašyk teisingai, kaip čia):\n" + "; ".join(ctx.spelling_notes)))
     if ctx.profiles:
         parts.append(("profiles", "Grupes nariai:\n" + "\n".join(f"- {n}: {p}" for n, p in ctx.profiles.items())))
     if ctx.people:
@@ -178,6 +181,44 @@ def _check(name: str, ok: bool, reason: str = "") -> dict:
     return {"name": name, "ok": ok, "reason": reason}
 
 
+async def _proofread(proofread, texts: list[str], unknown: list[str], speller, recent_own, ctx: PromptContext,
+                     run: TraceRun) -> list[str] | None:
+    """Ask the proofreader about the flagged words, then run the filters again on the fixed draft.
+    Words it judged real stay; anything it could not settle sends the reply on to the local retry."""
+    from .proofread import ProofError  # local import: brain stays free of the optional API client
+    try:
+        with run.step("proofread") as st:
+            try:
+                out = await proofread(texts, unknown)
+            except ProofError as e:
+                st.status = "error"
+                st.detail["error"] = str(e)
+                log.info("proofreading skipped: %s", e)
+                return None
+            st.detail.update(out.stats)
+            st.detail["words"] = unknown
+            st.detail["fixed"] = [[v.word, v.fix] for v in out.verdicts if not v.keep]
+            st.detail["kept"] = [v.word for v in out.verdicts if v.keep]
+    except Exception:  # noqa: BLE001  (a bug here must never cost the reply)
+        log.exception("proofreading failed")
+        return None
+    t0 = time.perf_counter()
+    fixed = out.texts
+    kept = {fold(v.word) for v in out.verdicts if v.keep}
+    still = [w for w in (speller.unknown(fixed) if speller else []) if fold(w) not in kept]
+    replaced = {fold(v.fix or "") for v in out.verdicts if not v.keep}
+    still = [w for w in still if fold(w) not in replaced]  # Claude's own spelling wins over the dictionary
+    checks = [_check("empty", bool(fixed)),
+              _check("leak", not leaks_prompt(" ".join(fixed), ctx.persona)),
+              _check("repeat", not any(is_repeat(t, recent_own) for t in fixed)),
+              _check("foreign", not any(has_foreign_script(t) for t in fixed)),
+              _check("spelling", not still, ", ".join(still))]
+    ok = all(c["ok"] for c in checks)
+    run.add_step("filter", name="proofread", status="ok" if ok else "rejected", detail={"checks": checks},
+                 duration_ms=(time.perf_counter() - t0) * 1000)
+    return fixed if ok else None
+
+
 async def generate_reply(llm: LLM, ctx: PromptContext, *, num_predict: int, max_chars: int,
                          member_names: list[str], speller=None,
                          recent_own: list[str] | tuple[str, ...] = (), run: TraceRun = NULL_RUN) -> list[str] | None:
@@ -188,7 +229,8 @@ async def generate_reply(llm: LLM, ctx: PromptContext, *, num_predict: int, max_
 
 async def generate_reply_ex(llm: LLM, ctx: PromptContext, *, num_predict: int, max_chars: int,
                             member_names: list[str], speller=None,
-                            recent_own: list[str] | tuple[str, ...] = (), run: TraceRun = NULL_RUN) -> ReplyResult:
+                            recent_own: list[str] | tuple[str, ...] = (), run: TraceRun = NULL_RUN,
+                            proofread=None) -> ReplyResult:
     with run.step("prompt") as st:
         messages = build_prompt(ctx, max_chars=max_chars)
         st.detail.update(prompt_sections(ctx))
@@ -247,6 +289,11 @@ async def generate_reply_ex(llm: LLM, ctx: PromptContext, *, num_predict: int, m
                      duration_ms=(time.perf_counter() - t_filter) * 1000)
         if verdict is None:
             return ReplyResult(texts, image_used=images is not None)
+        spelling_only = verdict == "rejected" and [c["name"] for c in checks if not c["ok"]] == ["spelling"]
+        if attempt == 0 and spelling_only and proofread is not None and proofread.allowed():
+            fixed = await _proofread(proofread, texts, unknown, speller, recent_own, ctx, run)
+            if fixed:
+                return ReplyResult(fixed, image_used=images is not None)
     if misspelled:  # both attempts had odd words: send the cleaner one rather than nothing
         return ReplyResult(min(misspelled)[2], fallback=True)
     return ReplyResult(fallback, fallback=True) if fallback else ReplyResult(None)

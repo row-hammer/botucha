@@ -1,6 +1,7 @@
 """Load config.toml plus the bot token from the environment."""
 from __future__ import annotations
 
+import datetime as dt
 import tomllib
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -65,6 +66,30 @@ class PricesCfg:
 
 
 @dataclass(frozen=True)
+class ClaudeCfg:
+    """Optional, time-boxed proofreading of Botucha's own drafts by Claude. Off unless enabled."""
+    enabled: bool = False
+    until: dt.date | None = None  # switches itself off after this day
+    daily_limit: int = 100
+    model: str = "claude-opus-5-5"
+    timeout_s: float = 15.0
+
+
+def _claude(raw: dict) -> ClaudeCfg:
+    c = raw.get("claude", {})
+    until = c.get("until")
+    if isinstance(until, str):
+        try:
+            until = dt.date.fromisoformat(until)
+        except ValueError as e:
+            raise ConfigError(f"claude.until is not a date (YYYY-MM-DD): {until}") from e
+    elif until is not None and not isinstance(until, dt.date):
+        raise ConfigError("claude.until must be a date (YYYY-MM-DD)")
+    return ClaudeCfg(bool(c.get("enabled", False)), until, int(c.get("daily_limit", 100)),
+                     str(c.get("model", ClaudeCfg.model)), float(c.get("timeout_s", ClaudeCfg.timeout_s)))
+
+
+@dataclass(frozen=True)
 class Config:
     telegram: TelegramCfg
     model: ModelCfg
@@ -72,6 +97,7 @@ class Config:
     paths: PathsCfg
     memory: MemoryCfg = MemoryCfg()
     prices: PricesCfg = PricesCfg()
+    claude: ClaudeCfg = ClaudeCfg()
 
 
 def load_config(path: Path, env: Mapping[str, str]) -> Config:
@@ -104,6 +130,7 @@ def load_config(path: Path, env: Mapping[str, str]) -> Config:
             memory=MemoryCfg(tuple(int(u) for u in raw.get("memory", {}).get("locked_members", []))),
             prices=PricesCfg(bool(raw.get("prices", {}).get("enabled", True)),
                              tuple((str(k).lower(), str(v)) for k, v in raw.get("prices", {}).get("aliases", {}).items())),
+            claude=_claude(raw),
         )
     except KeyError as e:
         raise ConfigError(f"missing config key: {e}") from e

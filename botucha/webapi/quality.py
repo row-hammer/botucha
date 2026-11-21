@@ -6,7 +6,9 @@ import datetime as dt
 from collections import Counter
 from statistics import mean
 
+from ..proofread import known_words
 from ..store import Store
+from ..trigger import fold
 from .metrics import REPLIED, Range, percentile
 from .pipeline import _detail, _reply_runs, _start
 
@@ -103,9 +105,13 @@ def compute_quality(store: Store, now: float, range_: Range, *, num_ctx: int,
         t = dt.datetime.fromtimestamp(ts, tz)
         activity[t.weekday()][t.hour] += 1
 
+    top = words.most_common(TOP_WORDS)
+    claude = _latest_verdicts(store, [w for w, _ in top])
+    known = known_words(store)
     return {
         "words": [{"word": w, "n": n, "traces": len(word_traces[w]), "last": word_last[w][0],
-                   "trace_id": word_last[w][1]} for w, n in words.most_common(TOP_WORDS)],
+                   "trace_id": word_last[w][1], "claude": claude.get(w), "known": fold(w) in known}
+                  for w, n in top],
         "attempts": dict(sorted(attempts.items())),
         "triggers": dict(triggers.most_common()),
         "people": sorted(people.values(), key=lambda p: (-p["runs"], p["name"])),
@@ -117,3 +123,15 @@ def compute_quality(store: Store, now: float, range_: Range, *, num_ctx: int,
         "activity": activity,
     }
 
+
+
+def _latest_verdicts(store: Store, words: list[str]) -> dict[str, dict]:
+    """Claude's most recent verdict per word (lower-case), when it judged that word."""
+    if not words:
+        return {}
+    out: dict[str, dict] = {}
+    marks = ",".join("?" * len(words))
+    for word, verdict, fix in store.conn.execute(
+            f"SELECT lower(word), verdict, fix FROM spell_fixes WHERE lower(word) IN ({marks}) ORDER BY id", words):
+        out[word] = {"verdict": verdict, "fix": fix}
+    return out

@@ -9,7 +9,7 @@ from collections import Counter
 from ..store import Store
 from .metrics import RANGES, REPLIED, Range
 
-STAGES = ("context", "retrieval", "prompt", "gen1", "gen2", "filter", "send")
+STAGES = ("context", "retrieval", "prompt", "gen1", "proof", "gen2", "filter", "send")
 _ATTEMPT = re.compile(r"(\d+)")
 
 
@@ -32,19 +32,28 @@ def reply_path(outcome: str | None, trigger: str, steps: list[tuple]) -> list[st
     (generation failed) or the first failed filter check ("rejected" if the trace has no checks)."""
     path = [f"trigger:{trigger or 'unknown'}"]
     results: dict[int, str] = {}
+    proof: str | None = None  # Claude's proofreading between attempt 1 and 2, when it ran
     for kind, name, status, detail in steps:
-        n = _attempt(name)
-        if kind == "generation" and status == "error":
-            results[n] = "error"
+        if kind == "proofread":
+            proof = "error" if status == "error" else "ok"
+        elif kind == "filter" and name == "proofread":
+            proof = "ok" if status == "ok" else _first_failed(detail)
+        elif kind == "generation" and status == "error":
+            results[_attempt(name)] = "error"
         elif kind == "filter":
-            if status == "ok":
-                results[n] = "ok"
-            else:
-                failed = [c.get("name") for c in _detail(detail).get("checks", [])
-                          if isinstance(c, dict) and not c.get("ok", True) and c.get("name")]
-                results[n] = failed[0] if failed else "rejected"
-    path += [f"a{n}:{results[n]}" for n in sorted(results)]
+            results[_attempt(name)] = "ok" if status == "ok" else _first_failed(detail)
+    for n in sorted(results):
+        path.append(f"a{n}:{results[n]}")
+        if n == 1 and proof:
+            path.append(f"claude:{proof}")
     return path + [f"out:{outcome or 'unknown'}"]
+
+
+def _first_failed(detail: str | None) -> str:
+    checks = _detail(detail).get("checks", [])
+    failed = [c.get("name") for c in checks if isinstance(c, dict) and not c.get("ok", True) and c.get("name")] \
+        if isinstance(checks, list) else []
+    return failed[0] if failed else "rejected"
 
 
 def _reply_runs(store: Store, start: float) -> list[tuple]:
@@ -71,7 +80,7 @@ def _stage_ms(steps: list[tuple]) -> dict[str, float]:
     out = dict.fromkeys(STAGES, 0.0)
     for kind, name, _status, _detail, dur in steps:
         key = (("gen1" if _attempt(name) == 1 else "gen2") if kind == "generation"
-               else kind if kind in out else None)
+               else "proof" if kind == "proofread" else kind if kind in out else None)
         if key:
             out[key] += dur or 0.0
     return out
