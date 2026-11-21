@@ -77,6 +77,11 @@ class Outbox(Protocol):
     async def fetch_image(self, file_id: str) -> bytes: ...
 
 
+def is_private(chat_id: int) -> bool:
+    """Telegram gives users positive ids and groups negative ones."""
+    return chat_id > 0
+
+
 def _read(path) -> str:
     try:
         return path.read_text(encoding="utf-8")
@@ -229,7 +234,7 @@ class Botucha:
                         self.last_error = f"send: {e}"
                 return
 
-        direct = m.chat_id > 0 or is_direct(  # positive chat id = private chat: always talking to him
+        direct = is_private(m.chat_id) or is_direct(  # a private chat is always talking to him
             m.text, reply_to_bot=m.reply_to_bot, mentions_bot=m.mentions_bot,
             name_regex=self.cfg.telegram.bot_name_regex)
         decision, reason = decide_with_reason(m.text, sender_is_bot=own, direct=direct, started_at=self.started_at,
@@ -318,10 +323,10 @@ class Botucha:
         return [r[0] for r in rows]
 
     def vocabulary(self) -> set[str]:
-        """Words the group itself uses (members only, never Botucha), plus slang and names."""
+        """Words the group itself uses (members only, never Botucha, never a private chat), plus slang and names."""
         words: set[str] = set()
-        for (text,) in self.store.conn.execute("SELECT text FROM messages WHERE is_bot=0 AND user_id != ?",
-                                               (self.bot_user_id,)):
+        for (text,) in self.store.conn.execute(
+                "SELECT text FROM messages WHERE is_bot=0 AND user_id != ? AND chat_id < 0", (self.bot_user_id,)):
             # caption only: a [nuotrauka: …] description is Botucha's wording, not the group's
             words.update(w.lower() for w in re.findall(r"[^\W\d_]+", caption_of(text) if text.startswith("[nuotrauka") else text))
         for t in self.memory.all_slang():
@@ -540,6 +545,8 @@ class Botucha:
 
     async def _learn_tick(self) -> None:
         for chat_id in self.cfg.telegram.chat_ids:
+            if is_private(chat_id):
+                continue  # not the group's memory: no facts, slang or profile lines come from a private chat
             last = self.store.recent_messages(chat_id, 1)
             if not last:
                 continue

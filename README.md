@@ -300,6 +300,8 @@ chunks and returns JSON with facts (about named people) and slang. Rules:
 - facts that look like instructions or are too long are dropped;
 - facts about a known person always carry that person's name, so they link correctly;
 - members listed in `memory.locked_members` get no automatic facts and no profile refresh;
+- a private chat with him is never learned from: no facts, slang, profile lines or spell-check vocabulary come
+  from it (`/isimink` and `/slengas` typed there still work, because that is teaching him on purpose);
 - profiles are regenerated every ~200 messages.
 
 Malformed JSON skips the run without writing anything.
