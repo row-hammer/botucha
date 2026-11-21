@@ -133,7 +133,7 @@ async def main(config_path: Path) -> None:
     env = {**load_env(config_path.parent / ".env"), **os.environ}
     cfg = load_config(config_path, env)
     store = Store(cfg.paths.db)
-    memory = Memory(store, OllamaEmbedder(cfg.model.ollama_host, cfg.model.embed_model))
+    memory = Memory(store, OllamaEmbedder(cfg.model.ollama_host, cfg.model.embed_model, keep_alive=cfg.model.keep_alive))
     tg = Bot(cfg.telegram.token)
     me = await tg.get_me()
     log.info("logged in as @%s (%d)", me.username, me.id)

@@ -80,6 +80,7 @@ class Memory:
         self.embedder = embedder
         self.clock = clock
         self._index_lock = asyncio.Lock()
+        self._query_vecs: dict[str, np.ndarray] = {}  # a reply searches chunks and facts with the same query
 
     # ---- chunks ---------------------------------------------------------
     async def index_new_chunks(self, chat_id: int, *, force: bool = False, limit: int | None = None) -> int:
@@ -128,7 +129,7 @@ class Memory:
         """Meaning and words together: the cosine ranking and the FTS (word match) ranking are merged by
         reciprocal rank fusion, so a chunk holding the one rare word asked about can win over chunks that are
         merely about the same kind of thing. Returns (id, cosine, matched by FTS), best first."""
-        q = (await self.embedder.embed([query]))[0]
+        q = await self._query_vec(query)
         rows = self.db.execute(f"SELECT id, emb FROM {table} {where}", args).fetchall()
         if not rows:
             return []
@@ -153,6 +154,14 @@ class Memory:
         words = set(by_words)
         best = sorted(fused, key=lambda i: (-fused[i], -score_of[i]))[:k]
         return [(i, score_of[i], i in words) for i in best]
+
+    async def _query_vec(self, query: str) -> np.ndarray:
+        """The query's embedding, reused for the next few searches with the same text."""
+        if query not in self._query_vecs:
+            self._query_vecs[query] = (await self.embedder.embed([query]))[0]
+            while len(self._query_vecs) > 8:
+                del self._query_vecs[next(iter(self._query_vecs))]
+        return self._query_vecs[query]
 
     # ---- facts and slang --------------------------------------------------
     async def add_fact(self, kind: FactKind, text: str, about: int | None, source: str) -> int:

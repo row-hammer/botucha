@@ -120,3 +120,27 @@ async def test_a_reply_does_not_get_back_what_is_already_in_its_transcript(app):
     await bot.on_message(inc("botucha nvidia akcijos", msg_id=100))
     await settle()
     assert "Ka prisimeni" not in llm.calls[-1]["messages"][1]["content"]  # every chunk is in the last 40 lines
+
+
+async def test_one_reply_embeds_its_query_once():
+    s, mem = make(now=100_000)
+    add(s, 1, 0, "daway uzshortinam vwce")
+    await mem.index_new_chunks(C)
+    await mem.add_fact("fact", "tadas shortina vwce", None, "cmd:1")
+    before = mem.embedder.calls
+    await mem.search_chunks("kai shortinom vwce", k=3)
+    await mem.search_facts_scored("kai shortinom vwce", k=5)
+    assert mem.embedder.calls - before == 1
+
+
+async def test_the_embedding_model_stays_loaded_as_long_as_the_chat_model():
+    from botucha.embed import OllamaEmbedder
+    seen = {}
+
+    async def fake_embed(**kw):
+        seen.update(kw)
+        return {"embeddings": [[1.0, 0.0]]}
+    e = OllamaEmbedder("http://localhost:11434", "bge-m3", keep_alive="30m")
+    e.client.embed = fake_embed
+    await e.embed(["labas"])
+    assert seen["keep_alive"] == "30m" and seen["options"] == {"num_gpu": 0}
