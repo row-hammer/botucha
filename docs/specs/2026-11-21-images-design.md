@@ -47,8 +47,8 @@ Out of scope: stickers, GIFs, video, documents sent as files, and describing ima
    "Apibūdink šį paveikslėlį lietuviškai, iki 20 žodžių, be įžangos."
    - The result is cleaned: one line, ≤ 30 words, rejected if it has foreign script or starts with `/`.
    - It is stored as the message text: `[nuotrauka: <description>] <caption>`.
-   - It runs on the reply worker after the reply, so it never delays a reply. It gets its own trace
-     (`kind = "describe"`).
+   - It runs on the reply worker right after the reply is sent. It never delays that reply, but the next
+     reply can wait for it (a few seconds, `num_predict` 60). It gets its own trace (`kind = "describe"`).
 
 ## Errors
 
