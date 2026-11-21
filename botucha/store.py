@@ -125,14 +125,24 @@ def _row(r: tuple) -> StoredMessage:
 
 class Store:
     def __init__(self, path: str | Path):
+        self.path = path
         self.conn = sqlite3.connect(str(path), check_same_thread=False)
         self.conn.execute("PRAGMA busy_timeout=5000")  # the bot and the web service share this file
         if str(path) != ":memory:":
             self.conn.execute("PRAGMA journal_mode=WAL")
-        self.conn.executescript(SCHEMA)
-        self._migrate()
-        self.conn.execute("PRAGMA user_version = 1")
-        self.conn.commit()
+        # Schema and migrations under one write lock: the bot and the dashboard may start at the same moment,
+        # and a column must not be checked by one while the other is adding it.
+        self.conn.execute("BEGIN IMMEDIATE")
+        try:
+            for stmt in (x.strip() for x in SCHEMA.split(";")):
+                if stmt:
+                    self.conn.execute(stmt)
+            self._migrate()
+            self.conn.execute("PRAGMA user_version = 1")
+            self.conn.commit()
+        except BaseException:
+            self.conn.rollback()
+            raise
 
     def _migrate(self) -> None:
         if "image_file_id" not in {r[1] for r in self.conn.execute("PRAGMA table_info(messages)")}:
