@@ -21,10 +21,12 @@ class ChatResult:
     stats: dict = field(default_factory=dict)
 
 
-async def chat_ex(llm: Any, messages: list[dict], *, num_predict: int, fmt_json: bool = False) -> ChatResult:
-    """Text plus model stats when the LLM can give them (Ollama), plain text otherwise."""
+async def chat_ex(llm: Any, messages: list[dict], *, num_predict: int, fmt_json: bool = False,
+                  images: list[bytes] | None = None) -> ChatResult:
+    """Text plus model stats when the LLM can give them (Ollama), plain text otherwise.
+    images go with the last user message; an LLM without chat_ex cannot see them."""
     if hasattr(llm, "chat_ex"):
-        return await llm.chat_ex(messages, num_predict=num_predict, fmt_json=fmt_json)
+        return await llm.chat_ex(messages, num_predict=num_predict, fmt_json=fmt_json, images=images)
     return ChatResult(await llm.chat(messages, num_predict=num_predict, fmt_json=fmt_json), {})
 
 
@@ -47,11 +49,22 @@ class OllamaLLM:
     async def chat(self, messages: list[dict], *, num_predict: int, fmt_json: bool = False) -> str:
         return (await self.chat_ex(messages, num_predict=num_predict, fmt_json=fmt_json)).text
 
-    async def chat_ex(self, messages: list[dict], *, num_predict: int, fmt_json: bool = False) -> ChatResult:
+    async def has_vision(self) -> bool:
+        try:
+            return "vision" in ((await self.client.show(self.cfg.chat_model)).capabilities or [])
+        except Exception:
+            return False
+
+    async def chat_ex(self, messages: list[dict], *, num_predict: int, fmt_json: bool = False,
+                      images: list[bytes] | None = None) -> ChatResult:
+        if images:
+            messages = [dict(m) for m in messages]
+            last = max(i for i, m in enumerate(messages) if m.get("role") == "user")
+            messages[last]["images"] = list(images)
         r = await self.client.chat(
             model=self.cfg.chat_model, messages=messages, think=False, keep_alive=self.cfg.keep_alive,
             format="json" if fmt_json else None,
             options={"num_ctx": self.cfg.num_ctx, "num_predict": num_predict,
                      "temperature": self.cfg.temperature})
-        raw = r.model_dump() if hasattr(r, "model_dump") else dict(r)
+        raw = r.model_dump() if hasattr(r, "model_dump") else dict(r)  # dict in tests
         return ChatResult(r["message"]["content"] or "", self._stats(raw))

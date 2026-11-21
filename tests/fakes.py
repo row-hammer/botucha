@@ -43,7 +43,12 @@ class FakeLLM:
             raise r
         return r
 
-    async def chat_ex(self, messages: list[dict], *, num_predict: int, fmt_json: bool = False) -> ChatResult:
-        text = await self.chat(messages, num_predict=num_predict, fmt_json=fmt_json)
+    async def chat_ex(self, messages: list[dict], *, num_predict: int, fmt_json: bool = False,
+                      images: list[bytes] | None = None) -> ChatResult:
+        self.calls.append({"messages": messages, "num_predict": num_predict, "fmt_json": fmt_json, "images": images})
+        r = self.responses.pop(0) if self.responses else ""
+        if isinstance(r, Exception):
+            raise r
+        text = r
         n = len(text.split())
         return ChatResult(text, {"model": "fake", "eval_count": n, "eval_ms": 10.0, "tok_s": n / 0.01})

@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from .chunking import render_line
 from .guard import leaks_prompt
 from .trigger import fold
+from .images import IMAGE_GUARD
 from .llm import LLM, chat_ex
 from .store import StoredMessage
 from .trace import NULL_RUN, TraceRun
@@ -42,11 +43,14 @@ class PromptContext:
     serious: bool = False
     prices: list[str] = field(default_factory=list)
     people: list[str] = field(default_factory=list)
+    image: bytes | None = None  # the one photo he is looking at in this reply
 
 
 def _system_parts(ctx: PromptContext) -> list[tuple[str, str]]:
     """Stable parts first so Ollama can reuse the cached prefix."""
     parts = [("persona", ctx.persona.strip()), ("guard", DATA_GUARD), ("price_rule", PRICE_RULE)]
+    if ctx.image:
+        parts.append(("image_guard", IMAGE_GUARD))
     if ctx.serious:
         parts.append(("serious", SERIOUS_LINE))  # no style examples: they pull answers back to 5-word banter
     else:
@@ -190,20 +194,24 @@ async def generate_reply_ex(llm: LLM, ctx: PromptContext, *, num_predict: int, m
         st.detail["history"] = len(messages[1]["content"])
         st.detail["approx_tokens"] = sum(len(m["content"]) for m in messages) // 4
         st.prompt = messages[0]["content"] + "\n\n" + messages[1]["content"]
+        if ctx.image:
+            st.detail["image"] = {"bytes": len(ctx.image)}
     if ctx.serious:
         num_predict = max(num_predict, SERIOUS_NUM_PREDICT)
     max_lines = SERIOUS_MAX_LINES if ctx.serious else MAX_LINES
     fallback: list[str] | None = None
     misspelled: list[tuple[int, int, list[str]]] = []  # (unknown words, attempt, texts)
+    images = [ctx.image] if ctx.image else None
     for attempt in range(2):
         label = f"attempt {attempt + 1}"
         try:
             with run.step("generation", label) as st:
-                res = await chat_ex(llm, messages, num_predict=num_predict)
+                res = await chat_ex(llm, messages, num_predict=num_predict, images=images)
                 st.detail.update(res.stats)
                 st.detail["raw"] = res.text
-        except Exception as e:  # model down, timeout, bad response
+        except Exception as e:  # model down, timeout, bad response, or an image it cannot read
             log.warning("generation failed (attempt %d): %s", attempt + 1, e)
+            images = None  # retry on text only, so a bad image never costs the reply
             continue
         t_filter = time.perf_counter()
         texts = clean_reply(res.text, member_names, max_lines)

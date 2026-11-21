@@ -63,3 +63,77 @@ def test_messages_migration_adds_image_column(tmp_path):
     db.close()
     m = Store(path).get_message(1, 2)
     assert m.text == "labas" and m.image_file_id is None
+
+
+def _ctx(image=None):
+    from botucha.brain import PromptContext
+    from botucha.store import StoredMessage
+    return PromptContext(persona="tu esi botucha", style_examples="S", profiles={}, slang=[], chunks=[], facts=[],
+                         history=[StoredMessage(-1, 1, 5, "Tadas", 0.0, "[nuotrauka] žiūrėk")], bot_user_id=1,
+                         image=image)
+
+
+async def test_image_reaches_model_with_guard():
+    from botucha.brain import generate_reply_ex
+    from botucha.images import IMAGE_GUARD
+    from botucha.trace import Tracer
+    from tests.fakes import FakeLLM
+    store = Store(":memory:")
+    run = Tracer(store).start("reply")
+    llm = FakeLLM(["gražu"])
+    res = await generate_reply_ex(llm, _ctx(b"IMG"), num_predict=50, max_chars=10_000, member_names=[], run=run)
+    assert res.texts == ["gražu"] and llm.calls[0]["images"] == [b"IMG"]
+    assert IMAGE_GUARD in llm.calls[0]["messages"][0]["content"]
+    detail = store.conn.execute("SELECT detail FROM trace_steps WHERE kind='prompt'").fetchone()[0]
+    assert '"image": {"bytes": 3}' in detail
+
+
+async def test_model_error_with_image_retries_without():
+    from botucha.brain import generate_reply_ex
+    from tests.fakes import FakeLLM
+    llm = FakeLLM([RuntimeError("bad image"), "ok"])
+    res = await generate_reply_ex(llm, _ctx(b"IMG"), num_predict=50, max_chars=10_000, member_names=[])
+    assert res.texts == ["ok"] and llm.calls[1]["images"] is None
+
+
+async def test_no_image_no_guard():
+    from botucha.brain import generate_reply_ex
+    from botucha.images import IMAGE_GUARD
+    from tests.fakes import FakeLLM
+    llm = FakeLLM(["ok"])
+    await generate_reply_ex(llm, _ctx(None), num_predict=50, max_chars=10_000, member_names=[])
+    assert llm.calls[0]["images"] is None and IMAGE_GUARD not in llm.calls[0]["messages"][0]["content"]
+
+
+async def test_ollama_chat_ex_attaches_images():
+    from botucha.config import ModelCfg
+    from botucha.llm import OllamaLLM
+    seen = {}
+
+    class Client:
+        async def chat(self, **kw):
+            seen.update(kw)
+            return {"message": {"content": "x"}, "model": "m", "eval_count": 1, "eval_duration": 1}
+    llm = OllamaLLM(ModelCfg("m", "e", 1000, 10, "1m", "http://x"))
+    llm.client = Client()
+    msgs = [{"role": "system", "content": "s"}, {"role": "user", "content": "u"}]
+    await llm.chat_ex(msgs, num_predict=5, images=[b"IMG"])
+    assert seen["messages"][-1]["images"] == [b"IMG"] and "images" not in msgs[-1]
+
+
+async def test_has_vision():
+    from botucha.config import ModelCfg
+    from botucha.llm import OllamaLLM
+
+    class Client:
+        def __init__(self, caps):
+            self.caps = caps
+
+        async def show(self, model):
+            if self.caps is None:
+                raise ConnectionError("down")
+            return NS(capabilities=self.caps)
+    llm = OllamaLLM(ModelCfg("m", "e", 1000, 10, "1m", "http://x"))
+    for caps, want in ((["completion", "vision"], True), (["completion"], False), (None, False)):
+        llm.client = Client(caps)
+        assert await llm.has_vision() is want
