@@ -177,3 +177,13 @@ async def test_prompt_has_only_the_people_in_the_conversation(app):
     assert "Petras (petriukas, petro): Petras augina kates" in people  # named, by a word form
     assert "Tadas" in people and "coreweave" in people                  # wrote in the conversation
     assert "Ona" not in people                                          # nobody mentioned her
+
+
+async def test_people_lines_keep_the_newest_facts():
+    m = Memory(Store(":memory:"), FakeEmbedder(), clock=lambda: 1000.0)
+    m.add_person("Jonas", [])
+    for i in range(9):
+        await m.add_fact("fact", f"Jonas faktas numeris {i}", None, "auto")
+    line = m.people_lines()[0]
+    assert "numeris 8" in line and "numeris 3" in line and "numeris 2" not in line
+    assert line.index("numeris 3") < line.index("numeris 8")  # still oldest to newest among those shown

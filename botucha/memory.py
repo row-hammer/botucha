@@ -382,7 +382,7 @@ class Memory:
         for p in self.people():
             if only is not None and p.id not in only:
                 continue
-            facts = [f.text.rstrip(".") for f in self.person_facts(p.id)][:max_facts]
+            facts = [f.text.rstrip(".") for f in self.person_facts(p.id)][-max_facts:]  # the newest ones
             rels = self.relations(p.id)
             linked = {r.a.id for r in rels} | {r.b.id for r in rels}
             rel = [r.name for r in self.related(p.id) if r.id not in linked]
