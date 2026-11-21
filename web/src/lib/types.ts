@@ -57,3 +57,35 @@ export interface Metrics {
   rejections_by_filter: Record<string, number>;
   ratings: { t: number; good: number; bad: number }[];
 }
+
+export interface Fact {
+  id: number;
+  kind: "fact" | "slang";
+  text: string;
+  about: number | null;
+  source: string;
+  created: number;
+  updated: number;
+  people: number[];
+}
+
+export interface Person {
+  id: number;
+  name: string;
+  aliases: string[];
+  user_id: number | null;
+  fact_count: number;
+}
+
+export interface Relation {
+  id: number;
+  a: number;
+  rel: string;
+  b: number;
+}
+
+export interface PeopleGraph {
+  people: Person[];
+  relations: Relation[];
+  comentions: { a: number; b: number; n: number }[];
+}

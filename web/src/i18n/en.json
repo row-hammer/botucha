@@ -198,5 +198,66 @@
     "facts": "facts",
     "prices": "prices",
     "history": "conversation"
+  },
+  "memory": {
+    "tabs": {
+      "fact": "Facts",
+      "slang": "Slang"
+    },
+    "person": "Person",
+    "anyPerson": "Anyone",
+    "source": {
+      "all": "Any source",
+      "auto": "Learned",
+      "member": "Taught by members",
+      "web": "Added here"
+    },
+    "cols": {
+      "id": "#",
+      "text": "Text",
+      "people": "People",
+      "source": "Source",
+      "updated": "Updated"
+    },
+    "add": {
+      "fact": "Add fact",
+      "slang": "Add slang"
+    },
+    "edit": "Edit",
+    "text": "Text",
+    "slangHint": "word = meaning",
+    "factHint": "One short sentence, starting with who it is about.",
+    "deleteConfirm": "Delete #{id}? Botucha forgets it immediately.",
+    "count": "{n} entries",
+    "empty": "Nothing here.",
+    "errors": {
+      "empty": "Text is empty",
+      "long": "Too long, max {n} characters",
+      "slang": "Write it as: word = meaning"
+    }
+  },
+  "people": {
+    "add": "Add person",
+    "name": "Name",
+    "aliases": "Nicknames and word forms",
+    "aliasesHint": "comma separated, e.g. petro, petrui, petrą",
+    "facts": "Facts",
+    "relations": "Relations",
+    "noFacts": "No facts about this person.",
+    "noRelations": "No relations yet.",
+    "newRelation": "New relation",
+    "relation": "Relation",
+    "relationHint": "What is {a} to {b}? e.g. employer, friend",
+    "connectHint": "Drag from one person to another to link them.",
+    "member": "group member",
+    "friend": "friend outside the group",
+    "legendRelation": "relation",
+    "legendComention": "mentioned together",
+    "deleteRelation": "Delete relation",
+    "saveAliases": "Save word forms",
+    "errors": {
+      "name": "Name is empty",
+      "rel": "1–60 characters"
+    }
   }
 }

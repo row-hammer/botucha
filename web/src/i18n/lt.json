@@ -198,5 +198,66 @@
     "facts": "faktai",
     "prices": "kainos",
     "history": "pokalbis"
+  },
+  "memory": {
+    "tabs": {
+      "fact": "Faktai",
+      "slang": "Slengas"
+    },
+    "person": "Žmogus",
+    "anyPerson": "Bet kas",
+    "source": {
+      "all": "Bet koks šaltinis",
+      "auto": "Išmokti patys",
+      "member": "Išmokė nariai",
+      "web": "Pridėti čia"
+    },
+    "cols": {
+      "id": "#",
+      "text": "Tekstas",
+      "people": "Žmonės",
+      "source": "Šaltinis",
+      "updated": "Atnaujinta"
+    },
+    "add": {
+      "fact": "Pridėti faktą",
+      "slang": "Pridėti slengą"
+    },
+    "edit": "Redaguoti",
+    "text": "Tekstas",
+    "slangHint": "žodis = reikšmė",
+    "factHint": "Vienas trumpas sakinys, pradėtas žmogaus vardu.",
+    "deleteConfirm": "Ištrinti #{id}? Botucha tai pamirš iš karto.",
+    "count": "{n} įrašų",
+    "empty": "Čia nieko nėra.",
+    "errors": {
+      "empty": "Tekstas tuščias",
+      "long": "Per ilga, daugiausiai {n} simbolių",
+      "slang": "Rašyk taip: žodis = reikšmė"
+    }
+  },
+  "people": {
+    "add": "Pridėti žmogų",
+    "name": "Vardas",
+    "aliases": "Pravardės ir žodžių formos",
+    "aliasesHint": "atskirk kableliais, pvz. petro, petrui, petrą",
+    "facts": "Faktai",
+    "relations": "Ryšiai",
+    "noFacts": "Apie šį žmogų faktų nėra.",
+    "noRelations": "Ryšių dar nėra.",
+    "newRelation": "Naujas ryšys",
+    "relation": "Ryšys",
+    "relationHint": "Kas {a} yra {b}? pvz. darbdavys, draugas",
+    "connectHint": "Nutempk nuo vieno žmogaus prie kito, kad juos susietum.",
+    "member": "grupės narys",
+    "friend": "draugas ne iš grupės",
+    "legendRelation": "ryšys",
+    "legendComention": "minimi kartu",
+    "deleteRelation": "Ištrinti ryšį",
+    "saveAliases": "Išsaugoti žodžių formas",
+    "errors": {
+      "name": "Vardas tuščias",
+      "rel": "1–60 simbolių"
+    }
   }
 }
