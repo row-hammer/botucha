@@ -334,18 +334,21 @@ Each reply gets up to two attempts. An attempt is rejected when it:
 - contains a letter from a script other than Latin, Lithuanian or Cyrillic (a known Gemma glitch);
 - contains a word that is in neither the hunspell dictionary nor the words members themselves use.
 
-If both attempts have odd words, the cleaner one is sent rather than nothing. Lines written as another
-member (`Name: …`) or with chat-format labels are dropped. Direct calls that still fail get a short canned
-line; uninvited replies stay silent.
+A flagged word alone never costs a second generation (measured, the retry spelled better 3 times out of 17 and
+cost a median 7 s): the proofreader is asked if it is enabled; otherwise a direct call gets the draft as it is
+(shown as a fallback on the dashboard) and an uninvited reply is dropped. The second attempt is for the other
+rejections. Names he was told about (people, their word forms, facts written by a person) count as known
+words, and so does a capitalised two-word name at the start of a sentence. Lines written as another member
+(`Name: …`) or with chat-format labels are dropped. Direct calls that still fail get a short canned line;
+uninvited replies stay silent.
 
 ### Claude proofreading (`proofread.py`, optional)
 
-When attempt 1 fails **only** the spell check, Botucha can ask Claude (Anthropic API) about the flagged words
-instead of regenerating locally. Claude gets the draft reply and the flagged words, nothing else: no chat
+When a draft fails **only** the spell check, Botucha can ask Claude (Anthropic API) about the flagged words. Claude gets the draft reply and the flagged words, nothing else: no chat
 history, no member messages, no persona. It answers per word with structured JSON: `keep` (real word, name,
 slang) or a replacement of one to three words. Botucha applies the replacements itself and runs every filter
-again, so Claude cannot rewrite the reply. If Claude is off, out of budget, refuses or fails, the local second
-attempt runs as before.
+again, so Claude cannot rewrite the reply. If Claude is off, out of budget, refuses or fails, the draft is handled as
+described under Reply quality: sent as it is to a direct call, dropped when uninvited.
 
 Every verdict is stored (`spell_fixes`). The most frequent fixes go into the prompt as spelling notes
 ("nužvelgei (ne nužvalgai)"), and words Claude judged real can be approved on the dashboard's Quality page as

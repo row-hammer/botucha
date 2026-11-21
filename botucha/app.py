@@ -333,6 +333,11 @@ class Botucha:
             words.update(w.lower() for w in re.findall(r"[^\W\d_]+", t.split("=", 1)[0]))
         for mem in self.store.members().values():
             words.update(w.lower() for w in re.findall(r"[^\W\d_]+", f"{mem.name} {mem.username or ''}"))
+        # what he was told: people and their word forms, and facts a person wrote (never the model's own wording)
+        for p in self.memory.people():
+            words.update(w.lower() for t in [p.name, *p.aliases] for w in re.findall(r"[^\W\d_]+", t))
+        for (text,) in self.store.conn.execute("SELECT text FROM facts WHERE kind='fact' AND source != 'auto'"):
+            words.update(w.lower() for w in re.findall(r"[^\W\d_]+", text))
         words.update({"botucha", "botuchos", "xd", "xdd", "xddd", "xdddd"})
         words.update(known_words(self.store))  # approved on the dashboard (e.g. slang Claude judged real)
         return words
@@ -414,7 +419,7 @@ class Botucha:
                                              max_chars=self.cfg.model.num_ctx * 3,
                                              member_names=self._member_names(), speller=self.speller,
                                              recent_own=self._recent_own(chat_id), run=run,
-                                             proofread=self.proofreader)
+                                             proofread=self.proofreader, direct=bool(direct))
         except Exception as e:
             log.exception("reply preparation failed")
             self.last_error = f"{type(e).__name__}: {e}"
@@ -423,6 +428,9 @@ class Botucha:
                 await self._send(chat_id, [CANNED], direct[-1].msg_id, store=False)
             return
         texts = result.texts
+        if texts is None and result.quiet:
+            run.finish("skipped", error="stayed quiet: the uninvited reply had flagged words")
+            return
         if texts is None:
             self.last_error = self.last_error or "model returned nothing"
             run.finish("canned" if direct else "skipped", error="no usable reply: every attempt failed or was rejected")

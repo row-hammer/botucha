@@ -1,7 +1,7 @@
 """Reply quality: invented words, self-repetition, own lines in history."""
 from pathlib import Path
 
-from botucha.brain import PromptContext, generate_reply, is_repeat
+from botucha.brain import PromptContext, generate_reply, generate_reply_ex, is_repeat
 from botucha.spell import Speller
 from botucha.store import StoredMessage
 from tests.fakes import FakeLLM
@@ -39,18 +39,47 @@ def test_is_repeat():
     assert not is_repeat("šiandien spx krenta", own)
 
 
-async def test_invented_word_triggers_retry():
+async def test_a_flagged_word_does_not_cost_a_second_generation():
+    """Measured: the retry fixed the spelling 3 times out of 17 and cost a median 7 s every time."""
     llm = FakeLLM(["kad varna nuosekusi xdd", "kad greičiau baigtųsi"])
     sp = Speller(DICT, vocab=lambda: {"xdd"})
-    out = await generate_reply(llm, ctx(), num_predict=50, max_chars=10_000, member_names=[], speller=sp)
-    assert out == ["kad greičiau baigtųsi"] and len(llm.calls) == 2
+    res = await generate_reply_ex(llm, ctx(), num_predict=50, max_chars=10_000, member_names=[], speller=sp)
+    assert res.texts == ["kad varna nuosekusi xdd"] and res.fallback and len(llm.calls) == 1
 
 
-async def test_two_bad_attempts_send_the_cleaner_one():
-    llm = FakeLLM(["varkotės nuosekusi dygimai", "šiandien varkotės"])
+async def test_an_uninvited_reply_with_a_flagged_word_stays_quiet():
+    llm = FakeLLM(["kad varna nuosekusi xdd", "kad greičiau baigtųsi"])
+    sp = Speller(DICT, vocab=lambda: {"xdd"})
+    res = await generate_reply_ex(llm, ctx(), num_predict=50, max_chars=10_000, member_names=[], speller=sp,
+                                  direct=False)
+    assert res.texts is None and res.quiet and len(llm.calls) == 1
+
+
+async def test_a_direct_call_is_never_silent_because_of_the_dictionary():
+    own = ["sena eilute apie nieka"]
+    llm = FakeLLM(["sena eilute apie nieka\nvarkotės nuosekusi dygimai", "šiandien varkotės"])
     sp = Speller(DICT, vocab=set)
-    out = await generate_reply(llm, ctx(), num_predict=50, max_chars=10_000, member_names=[], speller=sp)
-    assert out == ["šiandien varkotės"]  # never silent because of the dictionary
+    res = await generate_reply_ex(llm, ctx(), num_predict=50, max_chars=10_000, member_names=[], speller=sp,
+                                  recent_own=own)
+    # attempt 1 also repeated himself, so it was generated again; of the two flagged drafts the cleaner one goes out
+    assert res.texts == ["šiandien varkotės"] and res.fallback and len(llm.calls) == 2
+
+
+async def test_an_uninvited_reply_that_is_flagged_twice_stays_quiet():
+    own = ["sena eilute apie nieka"]
+    llm = FakeLLM(["sena eilute apie nieka\nvarkotės nuosekusi dygimai", "šiandien varkotės"])
+    res = await generate_reply_ex(llm, ctx(), num_predict=50, max_chars=10_000, member_names=[],
+                                  speller=Speller(DICT, vocab=set), recent_own=own, direct=False)
+    assert res.texts is None and res.quiet
+
+
+async def test_quiet_on_purpose_is_not_reported_as_an_error(app):
+    bot, store, llm, out = await app(["kad varna nuosekusi"], rng_value=0.0)  # rng 0.0: an uninvited reply triggers
+    bot.speller = Speller(DICT, vocab=set)
+    await bot.on_message(inc("siaip snekam apie orus"))
+    await settle()
+    assert out.sent == [] and len(llm.calls) == 1
+    assert not bot.last_error
 
 
 async def test_repeated_line_dropped_or_retried():
@@ -105,6 +134,12 @@ def test_speller_skips_names_inside_a_sentence():
     assert sp.unknown(["pirkau Vanguard fondą, Bonnie Blue irgi"]) == []
 
 
+def test_speller_skips_a_two_word_name_that_starts_a_sentence():
+    sp = Speller(DICT, vocab=set)
+    assert sp.unknown(["Bonnie Blue vėl naujienose. o Varkotės čia"]) == []
+    assert sp.unknown(["Varkotės čia."]) == ["Varkotės"]  # one capital at the start proves nothing
+
+
 def test_speller_still_checks_the_first_word_of_a_sentence():
     sp = Speller(DICT, vocab=set)
     assert sp.unknown(["Varkotės čia. Nuosekusi varna! Skrietėti?"]) == ["Varkotės", "Nuosekusi", "Skrietėti"]
@@ -131,3 +166,14 @@ def test_min_p_missing_from_old_config_uses_default(tmp_path):
     p = tmp_path / "config.toml"
     p.write_text("\n".join(l for l in src.splitlines() if not l.startswith("min_p")))
     assert load_config(p, {"BOTUCHA_TOKEN": "t"}).model.min_p == ModelCfg.min_p
+
+
+async def test_names_he_was_told_about_are_group_vocabulary(app):
+    """People, their word forms, and the words of facts a person wrote: none of that is an invented word."""
+    bot, store, _, _ = await app()
+    bot.memory.add_person("Vanguardas", ["vangardo"])
+    await bot.memory.add_fact("fact", "Jonas dirba Kaliningrade", None, "cmd:111")
+    await bot.memory.add_fact("fact", "Jonas megsta Zoviraksa", None, "web")
+    await bot.memory.add_fact("fact", "Jonas megsta Isgalvotuma", None, "auto")  # the model's own wording proves nothing
+    words = bot.vocabulary()
+    assert {"vanguardas", "vangardo", "kaliningrade", "zoviraksa"} <= words and "isgalvotuma" not in words

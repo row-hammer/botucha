@@ -188,17 +188,17 @@ async def test_kept_words_pass_the_recheck(store):
     assert res.texts == ["tsg degenas glichiuoja"] and len(llm.calls) == 1
 
 
-async def test_claude_failure_falls_back_to_the_local_retry(store):
+async def test_claude_failure_sends_the_draft_without_a_second_generation(store):
     llm = FakeLLM(["tu nužvalgai", "kad greičiau baigtųsi"])
     p = proofreader(store, [RuntimeError("down")])
     run = Tracer(store).start("reply", trigger="direct")
     res = await generate_reply_ex(llm, ctx(), num_predict=50, max_chars=10_000, member_names=[],
                                   speller=Speller(DICT, vocab=set), proofread=p, run=run)
-    run.finish("sent")
-    assert res.texts == ["kad greičiau baigtųsi"] and len(llm.calls) == 2
+    run.finish("fallback")
+    assert res.texts == ["tu nužvalgai"] and res.fallback and len(llm.calls) == 1
     steps = store.conn.execute("SELECT kind, name, status, detail FROM trace_steps WHERE trace_id=? ORDER BY seq",
                                (run.id,)).fetchall()
-    assert reply_path("sent", "direct", steps) == ["trigger:direct", "a1:spelling", "claude:error", "a2:ok", "out:sent"]
+    assert reply_path("fallback", "direct", steps) == ["trigger:direct", "a1:spelling", "claude:error", "out:fallback"]
 
 
 async def test_not_called_when_not_allowed_or_for_other_rejections(store):

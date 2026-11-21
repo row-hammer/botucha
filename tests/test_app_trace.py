@@ -64,14 +64,10 @@ async def test_reply_trace_has_all_steps(tbot):
 
 
 async def test_rejected_attempt_then_second(tbot):
+    from botucha.store import StoredMessage
+    from tests.test_app import BOT_ID, C
     bot, store, out = await tbot(["pirmas atsakymas", "antras atsakymas"])
-    calls = []
-
-    class Speller:
-        def unknown(self, texts):
-            calls.append(texts)
-            return ["žiurknodis"] if len(calls) == 1 else []
-    bot.speller = Speller()
+    store.add_message(StoredMessage(C, 900, BOT_ID, "Botucha", 1.0, "pirmas atsakymas", None, True))  # he said it before
     await bot.on_message(inc("botucha?"))
     await settle()
     [(tid, _, _, outcome, reply, _)] = traces(store)
@@ -81,8 +77,26 @@ async def test_rejected_attempt_then_second(tbot):
     filters = [s for s in st if s[0] == "filter"]
     assert [g[1] for g in gens] == ["attempt 1", "attempt 2"] and len(filters) == 2
     assert filters[0][2] == "rejected" and filters[1][2] == "ok"
-    spelling = next(c for c in filters[0][3]["checks"] if c["name"] == "spelling")
-    assert spelling["ok"] is False and "žiurknodis" in spelling["reason"]
+    repeat = next(c for c in filters[0][3]["checks"] if c["name"] == "repeat")
+    assert repeat["ok"] is False and "pirmas atsakymas" in repeat["reason"]
+
+
+async def test_flagged_word_trace_has_one_generation_and_a_fallback_outcome(tbot):
+    bot, store, out = await tbot(["pirmas atsakymas", "antras atsakymas"])
+
+    class Speller:
+        def unknown(self, texts):
+            return ["žiurknodis"]
+    bot.speller = Speller()
+    await bot.on_message(inc("botucha?"))
+    await settle()
+    [(tid, _, _, outcome, reply, _)] = traces(store)
+    assert outcome == "fallback" and reply == "pirmas atsakymas"
+    st = steps(store, tid)
+    assert [s[1] for s in st if s[0] == "generation"] == ["attempt 1"]
+    [flt] = [s for s in st if s[0] == "filter"]
+    spelling = next(c for c in flt[3]["checks"] if c["name"] == "spelling")
+    assert flt[2] == "rejected" and spelling["ok"] is False and "žiurknodis" in spelling["reason"]
 
 
 async def test_trace_when_model_fails_twice(tbot):

@@ -44,8 +44,11 @@ class Speller:
         cand: list[str] = []
         for t in texts:
             for sentence in _SENTENCE.split(t):
-                for i, w in enumerate(_WORD.findall(sentence)):
-                    name = i > 0 and w[0].isupper()  # Vanguard, Bonnie Blue: names the dictionary cannot know
+                words = _WORD.findall(sentence)
+                for i, w in enumerate(words):
+                    # Vanguard, Bonnie Blue: names the dictionary cannot know. A capital inside a sentence is a
+                    # name; at its start only when the next word is capitalised too (one capital proves nothing).
+                    name = w[0].isupper() and (i > 0 or (len(words) > 1 and words[1][0].isupper()))
                     if len(w) <= 2 or w.isupper() or name or fold(w) in known or w in cand:
                         continue
                     cand.append(w)

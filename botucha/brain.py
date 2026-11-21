@@ -175,6 +175,7 @@ class ReplyResult:
     texts: list[str] | None
     fallback: bool = False  # sent from a fallback path (stray script stripped, or the less misspelled attempt)
     image_used: bool = False  # the sent text came from an attempt that saw the image
+    quiet: bool = False  # nothing to send on purpose: an uninvited reply that was not good enough
 
 
 def _check(name: str, ok: bool, reason: str = "") -> dict:
@@ -230,7 +231,10 @@ async def generate_reply(llm: LLM, ctx: PromptContext, *, num_predict: int, max_
 async def generate_reply_ex(llm: LLM, ctx: PromptContext, *, num_predict: int, max_chars: int,
                             member_names: list[str], speller=None,
                             recent_own: list[str] | tuple[str, ...] = (), run: TraceRun = NULL_RUN,
-                            proofread=None) -> ReplyResult:
+                            proofread=None, direct: bool = True) -> ReplyResult:
+    """Up to two attempts. A draft whose only problem is a flagged word is not generated again (measured: the
+    second try spelled better 3 times out of 17 and cost a median 7 s): the proofreader is asked when allowed;
+    otherwise someone who called him gets the draft as it is, and an uninvited reply (direct=False) is dropped."""
     with run.step("prompt") as st:
         messages = build_prompt(ctx, max_chars=max_chars)
         st.detail.update(prompt_sections(ctx))
@@ -290,10 +294,14 @@ async def generate_reply_ex(llm: LLM, ctx: PromptContext, *, num_predict: int, m
         if verdict is None:
             return ReplyResult(texts, image_used=images is not None)
         spelling_only = verdict == "rejected" and [c["name"] for c in checks if not c["ok"]] == ["spelling"]
-        if attempt == 0 and spelling_only and proofread is not None and proofread.allowed():
-            fixed = await _proofread(proofread, texts, unknown, speller, recent_own, ctx, run)
-            if fixed:
-                return ReplyResult(fixed, image_used=images is not None)
-    if misspelled:  # both attempts had odd words: send the cleaner one rather than nothing
-        return ReplyResult(min(misspelled)[2], fallback=True)
+        if spelling_only:
+            if proofread is not None and proofread.allowed():
+                fixed = await _proofread(proofread, texts, unknown, speller, recent_own, ctx, run)
+                if fixed:
+                    return ReplyResult(fixed, image_used=images is not None)
+            if direct:
+                return ReplyResult(texts, fallback=True, image_used=images is not None)
+            return ReplyResult(None, quiet=True)
+    if misspelled:  # flagged words plus another problem, twice: the cleaner draft rather than nothing
+        return ReplyResult(min(misspelled)[2], fallback=True) if direct else ReplyResult(None, quiet=True)
     return ReplyResult(fallback, fallback=True) if fallback else ReplyResult(None)
