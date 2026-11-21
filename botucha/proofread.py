@@ -116,8 +116,9 @@ def spelling_notes(store: Store, n: int = 15) -> list[str]:
     """Most frequent corrections as prompt notes, e.g. "nužvelgei (ne nužvalgai)"."""
     rows = store.conn.execute(
         "SELECT lower(word), fix, COUNT(*) AS c, MAX(ts) FROM spell_fixes WHERE verdict='fix' AND fix IS NOT NULL "
-        "GROUP BY lower(word), fix ORDER BY c DESC, MAX(ts) DESC LIMIT ?", (n,)).fetchall()
-    return [f"{fix} (ne {word})" for word, fix, _, _ in rows]
+        "GROUP BY lower(word), fix ORDER BY c DESC, MAX(ts) DESC", ()).fetchall()
+    known = known_words(store)  # approved as a real word: the 'fix' was wrong, so it is no note
+    return [f"{fix} (ne {word})" for word, fix, _, _ in rows if fold(word) not in known][:n]
 
 
 class ClaudeProofreader:

@@ -260,3 +260,13 @@ def test_app_vocabulary_includes_known_words(tmp_path):
     bot = Botucha(make_cfg(tmp_path), s, Memory(s, FakeEmbedder()), FakeLLM([]), FakeOutbox(), rng=random.Random(0),
                   clock=lambda: NOW, bot_user_id=BOT_ID, bot_username="b", sleep=nosleep, started_at=0.0)
     assert "glichiuoja" in bot.vocabulary()
+
+
+def test_a_word_approved_as_known_gets_no_spelling_note(store):
+    store.conn.execute("INSERT INTO spell_fixes (ts, word, verdict, fix, model) VALUES (1, 'Bybis', 'fix', 'vyras', 'm')")
+    store.conn.execute("INSERT INTO spell_fixes (ts, word, verdict, fix, model) VALUES (1, 'nužvalgai', 'fix', 'nužvelgei', 'm')")
+    store.conn.commit()
+    set_known_word(store, "bybis", True, now=2.0)  # slang Claude wrongly 'fixed': approved on the Quality page
+    assert spelling_notes(store) == ["nužvelgei (ne nužvalgai)"]
+    set_known_word(store, "bybis", False, now=3.0)
+    assert len(spelling_notes(store)) == 2

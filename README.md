@@ -378,7 +378,8 @@ described under Reply quality: sent as it is to a direct call, dropped when unin
 
 Every verdict is stored (`spell_fixes`). The most frequent fixes go into the prompt as spelling notes
 ("nužvelgei (ne nužvalgai)"), and words Claude judged real can be approved on the dashboard's Quality page as
-known words, so the spell check stops flagging them. Both keep working after Claude is switched off.
+known words, so the spell check stops flagging them. Approving a word also drops any spelling note that
+"corrected" it, which is how a wrong fix is taken back. Both keep working after Claude is switched off.
 
 It is off unless `[claude] enabled = true` and `ANTHROPIC_API_KEY` is in `.env`. It switches itself off after
 `until`, stops for the day at `daily_limit` calls, and has an on/off switch on the Quality page. It uses
