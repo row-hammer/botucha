@@ -127,6 +127,7 @@ class Botucha:
         self.warm_prompt_cache = False  # set by __main__: keep the stable prompt in the model's cache
         self._warmed: str | None = None  # the system message the model has cached, as far as we know
         self._used_model = False  # set by a learning tick that called the model
+        self._batch_left: list[Job] = []  # the running batch's jobs not answered yet
         self._group_words: set[str] = set()  # words members wrote, read incrementally by vocabulary()
         self._vocab_rowid = 0
         self.worker = ReplyWorker(self.run_job, quiet_s=cfg.trigger.burst_quiet_s,
@@ -238,7 +239,7 @@ class Botucha:
                     await self._yawn_once(m)  # commands cost model calls, Yahoo lookups and writes too
                     return
                 if name in ("rimtai", "atsimeni") and m.ts >= self.started_at and self.state.enabled:
-                    self.worker.submit(ReplyJob(m.chat_id, m.msg_id, direct=True, serious=name == "rimtai",
+                    self._submit(ReplyJob(m.chat_id, m.msg_id, direct=True, serious=name == "rimtai",
                                                 recall=name == "atsimeni", links=name == "atsimeni",
                                                 trigger="serious" if name == "rimtai" else "recall"))
                     return
@@ -279,7 +280,7 @@ class Botucha:
         if decision is Decision.REPLY:
             if not direct:
                 mark_unsolicited(self.state, now)
-            self.worker.submit(ReplyJob(m.chat_id, m.msg_id, direct=direct,
+            self._submit(ReplyJob(m.chat_id, m.msg_id, direct=direct,
                                         serious=direct and re.search(r"\brimtai\b", fold(m.text)) is not None,
                                         recall=is_recall(m.text),
                                         trigger=reason))
@@ -434,6 +435,15 @@ class Botucha:
         return names
 
     # ---- surviving restarts and crashes ---------------------------------
+    def _submit(self, job: Job) -> None:
+        """Queue a reply and record it at once: a crash while it waits out the burst timer loses nothing."""
+        self.worker.submit(job)
+        self._persist_pending()
+
+    def _persist_pending(self) -> None:
+        """What is still unanswered: the part of the running batch not yet replied to, then the queue."""
+        self.save_pending([*self._batch_left, *self.worker.queued])
+
     def save_pending(self, jobs: list[Job]) -> None:
         """Jobs that have not been answered yet, so the next start can still answer them."""
         rows = [{**dataclasses.asdict(j), "links": getattr(j, "links", False)} for j in jobs]
@@ -464,7 +474,7 @@ class Botucha:
                     or job.chat_id not in self.cfg.telegram.chat_ids or (job.chat_id, job.msg_id) in seen):
                 continue
             seen.add((job.chat_id, job.msg_id))
-            self.worker.submit(job)
+            self._submit(job)
             n += 1
         closed = self.store.conn.execute(
             "UPDATE traces SET outcome='error', error='interrupted by a restart' "
@@ -478,7 +488,8 @@ class Botucha:
         by_chat: dict[int, list[Job]] = {}
         for j in jobs:
             by_chat.setdefault(j.chat_id, []).append(j)
-        self.save_pending(jobs)  # until answered: a crash from here on loses nothing
+        self._batch_left = list(jobs)  # until answered: a crash from here on loses nothing
+        self._persist_pending()
         self._batch_seq = self._error_seq  # errors from here on belong to this batch
         for chat_id, chat_jobs in list(by_chat.items()):
             try:
@@ -486,8 +497,8 @@ class Botucha:
             except Exception as e:  # a failure in one chat must not cost the others their reply
                 log.exception("reply in chat %d failed", chat_id)
                 self.last_error = f"{type(e).__name__}: {e}"
-            del by_chat[chat_id]
-            self.save_pending([j for js in by_chat.values() for j in js])
+            self._batch_left = [j for j in self._batch_left if j.chat_id != chat_id]
+            self._persist_pending()
 
     async def _reply(self, chat_id: int, jobs: list[Job]) -> None:
         last = self.store.get_message(chat_id, jobs[-1].msg_id)

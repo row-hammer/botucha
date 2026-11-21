@@ -147,3 +147,49 @@ async def test_a_finished_batch_leaves_nothing_pending(tmp_path):
     ask(store, 1, NOW - 1)
     await bot.run_job([ReplyJob(C, 1, True, False, False, "direct")])
     assert bot.recover() == 0 and store.get_state("pending_replies") in (None, "", "[]")
+
+
+async def test_a_queued_call_survives_a_hard_crash_before_its_batch_starts(tmp_path):
+    """Review finding: jobs waiting out the burst timer were only in memory, so an OOM kill lost them."""
+    db = tmp_path / "botucha.db"
+    bot, store = make_bot(tmp_path, store=Store(db))
+    await bot.on_message(inc("botucha labas", msg_id=1, ts=NOW + 1))  # queued; the worker never runs (crash)
+    store.conn.close()
+
+    bot2, store2 = make_bot(tmp_path, store=Store(db), responses=["labas tau"], now=NOW + 30)
+    assert bot2.recover() == 1
+    await run_worker_once(bot2)
+    assert [mid for _, _, mid in bot2.outbox.sent] == [1]
+
+
+async def test_a_chat_answered_before_a_timed_out_drain_is_not_answered_again(tmp_path):
+    """Review finding: the drain returned the whole running batch and that overwrote the narrowed list."""
+    import dataclasses
+    from botucha.__main__ import shutdown
+    other = 4242
+    db = tmp_path / "botucha.db"
+    bot, store = make_bot(tmp_path, store=Store(db))
+    bot.cfg = dataclasses.replace(bot.cfg, telegram=dataclasses.replace(bot.cfg.telegram, chat_ids=(C, other)))
+    ask(store, 1, NOW - 2)
+    ask(store, 2, NOW - 2, chat=other)
+
+    class FirstThenHang(FakeLLM):
+        async def chat_ex(self, *a, **k):
+            if self.calls:
+                await asyncio.sleep(3600)  # chat B's reply hangs
+            return await super().chat_ex(*a, **k)
+    bot.llm = FirstThenHang(["labas tau"])
+    task = asyncio.create_task(bot.worker.run())
+    bot.worker.submit(ReplyJob(C, 1, True, False, False, "direct"))
+    bot.worker.submit(ReplyJob(other, 2, True, False, False, "direct"))
+    await asyncio.sleep(0.3)  # A answered, B generating
+    await shutdown(bot, [task], drain_s=0.1)
+    assert [mid for _, _, mid in bot.outbox.sent] == [1]
+    store.conn.close()
+
+    bot2, _ = make_bot(tmp_path, store=Store(db), now=NOW + 30)
+    bot2.cfg = bot.cfg
+    jobs = []
+    bot2.worker.submit = jobs.append
+    bot2.recover()
+    assert [(j.chat_id, j.msg_id) for j in jobs] == [(other, 2)]

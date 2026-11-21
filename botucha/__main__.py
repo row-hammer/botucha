@@ -44,9 +44,9 @@ async def shutdown(app: Botucha, tasks: list[asyncio.Task], *, drain_s: float = 
     """Let the reply being generated (and any queued behind it) go out, keep what did not make it for the
     next start, then stop the loops."""
     left = await app.worker.drain(drain_s)
+    app._persist_pending()  # the unanswered part of the running batch and the queue, never what already went out
     if left:
         log.warning("stopping with %d reply(s) unfinished; they are answered after the restart", len(left))
-        app.save_pending(left)
     for t in tasks:
         t.cancel()
     await asyncio.gather(*tasks, return_exceptions=True)

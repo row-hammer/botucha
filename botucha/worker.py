@@ -40,6 +40,11 @@ class ReplyWorker:
         return asyncio.get_running_loop().time()
 
     @property
+    def queued(self) -> list[Job]:
+        """Jobs waiting for their batch to start (not the batch being answered)."""
+        return list(self._queue)
+
+    @property
     def pending(self) -> bool:
         return bool(self._queue) or self._running
 
@@ -85,7 +90,8 @@ class ReplyWorker:
 
     async def drain(self, timeout_s: float) -> list[Job]:
         """Stop taking jobs, answer what is running and queued without waiting for the burst to end, for up
-        to timeout_s. Returns the jobs that got no reply in time (the running batch first)."""
+        to timeout_s. Returns the batch still running and the jobs still queued; the caller knows which part
+        of the running batch was already answered."""
         self._draining = True
         self._wake.set()
         if self.pending:
