@@ -28,7 +28,7 @@ import { pct } from "@/lib/pipeline";
 import type { Metrics, Pipeline } from "@/lib/types";
 
 type Range = "24h" | "7d" | "30d";
-const axis = { stroke: "var(--muted-foreground)", fontSize: 11, tickLine: false, axisLine: false };
+const axis = { stroke: "var(--muted-foreground)", fontSize: 12, tickLine: false, axisLine: false };
 const tooltipStyle = {
   contentStyle: { background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 },
   labelStyle: { color: "var(--muted-foreground)" },
@@ -191,12 +191,7 @@ export default function Overview() {
                   cursor={{ fill: "var(--muted)" }}
                   labelFormatter={(_, p) => (p?.[0] ? label(p[0].payload.t) : "")}
                 />
-                <Bar
-                  dataKey="replies"
-                  name={t("overview.charts.replies")}
-                  fill="var(--chart-2)"
-                  radius={[4, 4, 0, 0]}
-                />
+                <Bar dataKey="replies" name={t("overview.charts.replies")} fill="var(--chart-2)" />
               </BarChart>
             </ResponsiveContainer>
           </ChartCard>
@@ -216,7 +211,6 @@ export default function Overview() {
                   dataKey="n"
                   name={t("overview.cards.rejections")}
                   fill="var(--chart-3)"
-                  radius={[0, 4, 4, 0]}
                 />
               </BarChart>
             </ResponsiveContainer>
@@ -250,7 +244,6 @@ export default function Overview() {
                   stackId="r"
                   name={t("overview.cards.bad")}
                   fill="var(--bad)"
-                  radius={[4, 4, 0, 0]}
                 />
               </BarChart>
             </ResponsiveContainer>

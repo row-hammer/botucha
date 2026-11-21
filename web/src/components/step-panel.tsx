@@ -33,7 +33,7 @@ function Hits({ hits, t }: { hits: Hit[]; t: ReturnType<typeof useT> }) {
         <li key={`${h.id ?? h.first_msg_id}`} className="rounded-md border p-2 text-sm">
           <div className="mb-1 flex items-center gap-2 text-xs">
             <span className="font-mono tabular-nums">{h.score.toFixed(3)}</span>
-            <div className="h-1.5 w-20 overflow-hidden rounded-full bg-muted">
+            <div className="h-1.5 w-20 overflow-hidden bg-muted">
               <div className="h-full bg-chart-2" style={{ width: `${Math.max(0, Math.min(1, h.score)) * 100}%` }} />
             </div>
             {h.fts ? <Badge variant="secondary">{t("thinking.panel.fts")}</Badge> : null}
@@ -147,8 +147,8 @@ function Body({ step, traceId }: { step: Step; traceId: number }) {
               {sections.map(([k, v]) => (
                 <li key={k} className="grid grid-cols-[8rem_1fr_5rem] items-center gap-2 text-xs">
                   <span>{t(`sections.${k}`)}</span>
-                  <span className="h-2 rounded bg-muted">
-                    <span className="block h-2 rounded bg-chart-1" style={{ width: `${(v / max) * 100}%` }} />
+                  <span className="h-2 rounded-none bg-muted">
+                    <span className="block h-2 rounded-none bg-chart-1" style={{ width: `${(v / max) * 100}%` }} />
                   </span>
                   <span className="text-right tabular-nums text-muted-foreground">
                     {t("thinking.panel.chars", { n: v })}

@@ -59,10 +59,10 @@ function StepNode({ data, selected }: NodeProps) {
       </div>
       <div className="mt-0.5 truncate text-muted-foreground text-xs">{summary(step, t) || " "}</div>
       <div className="mt-1.5 flex items-center gap-2">
-        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-          <div className="h-full rounded-full bg-chart-1" style={{ width: `${share}%` }} />
+        <div className="h-1.5 flex-1 overflow-hidden bg-muted">
+          <div className="h-full bg-chart-1" style={{ width: `${share}%` }} />
         </div>
-        <span className="text-[11px] tabular-nums text-muted-foreground">{fmtMs(step.duration_ms)}</span>
+        <span className="text-xs tabular-nums text-muted-foreground">{fmtMs(step.duration_ms)}</span>
       </div>
       <Handle type="source" position={Position.Right} className="!size-2 !border-0 !bg-muted-foreground" />
     </div>

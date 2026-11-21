@@ -49,7 +49,7 @@ export function PipelineFlow({ data, onSelect }: { data: Pipeline; onSelect: (no
         onClick={() => onSelect(id)}
         onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onSelect(id)}
       >
-        <rect x={x} y={y} width={width} height={Math.max(height, 2)} rx={2} fill={fill[nodeKind(id)]} />
+        <rect x={x} y={y} width={width} height={Math.max(height, 2)} fill={fill[nodeKind(id)]} />
         <text
           x={x + width + 6}
           y={y + height / 2}

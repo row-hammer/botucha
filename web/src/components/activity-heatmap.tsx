@@ -12,7 +12,7 @@ export function ActivityHeatmap({ data }: { data: number[][] }) {
   return (
     <div className="overflow-x-auto">
       <div
-        className="grid min-w-[560px] gap-[3px] text-[10px] text-muted-foreground"
+        className="grid min-w-[560px] gap-[3px] text-xs text-muted-foreground"
         style={{ gridTemplateColumns: "2.5rem repeat(24, minmax(0, 1fr))" }}
       >
         <span />
@@ -30,7 +30,7 @@ export function ActivityHeatmap({ data }: { data: number[][] }) {
                 // biome-ignore lint/suspicious/noArrayIndexKey: fixed 24 hour columns
                 key={h}
                 title={t("quality.activity.cell", { day: day(d), h, n })}
-                className="aspect-square rounded-[3px]"
+                className="aspect-square"
                 style={{
                   background: n
                     ? `color-mix(in oklch, var(--chart-1) ${Math.round(15 + (n / max) * 85)}%, transparent)`

@@ -15,7 +15,7 @@ export const STAGE_COLORS: Record<StageKey, string> = {
   send: "var(--ok)",
 };
 const KEYS = Object.keys(STAGE_COLORS) as StageKey[];
-const axis = { stroke: "var(--muted-foreground)", fontSize: 11, tickLine: false, axisLine: false };
+const axis = { stroke: "var(--muted-foreground)", fontSize: 12, tickLine: false, axisLine: false };
 
 /** Mean time per stage for each hour/day; the stack height is the mean reply time. */
 export function StageChart({ data, tick }: { data: Pipeline["stages"]; tick: (ts: number) => string }) {
@@ -47,7 +47,6 @@ export function StageChart({ data, tick }: { data: Pipeline["stages"]; tick: (ts
             stackId="s"
             name={t(`pipeline.stage.${k}`)}
             fill={STAGE_COLORS[k]}
-            radius={i === KEYS.length - 1 ? [4, 4, 0, 0] : undefined}
           />
         ))}
       </BarChart>
@@ -64,7 +63,7 @@ export function StageShare({ data }: { data: Pipeline["stages"] }) {
   if (!all || !n) return null;
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex h-3 overflow-hidden rounded-full bg-muted">
+      <div className="flex h-3 overflow-hidden bg-muted">
         {totals.map(({ k, ms }) =>
           ms > 0 ? (
             <div
@@ -78,7 +77,7 @@ export function StageShare({ data }: { data: Pipeline["stages"] }) {
       <dl className="grid grid-cols-1 gap-x-4 gap-y-1.5 text-xs sm:grid-cols-2 lg:grid-cols-1">
         {totals.map(({ k, ms }) => (
           <div key={k} className="flex items-center gap-1.5">
-            <span className="size-2 shrink-0 rounded-sm" style={{ background: STAGE_COLORS[k] }} />
+            <span className="size-2 shrink-0" style={{ background: STAGE_COLORS[k] }} />
             <dt className="truncate text-muted-foreground">{t(`pipeline.stage.${k}`)}</dt>
             <dd className="ml-auto font-medium tabular-nums">
               {fmtMs(ms / n)} <span className="text-muted-foreground">{Math.round((ms / all) * 100)}%</span>

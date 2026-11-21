@@ -82,7 +82,11 @@ function TraceList() {
         {path ? (
           <Badge variant="outline" className="gap-1 py-1 pr-1 pl-2.5 text-sm">
             {t("thinking.pathFilter", { node: nodeLabel(path), range: t(`overview.range.${range}`) })}
-            <Link href="/thinking/" aria-label={t("thinking.clearFilter")} className="rounded p-0.5 hover:bg-muted">
+            <Link
+              href="/thinking/"
+              aria-label={t("thinking.clearFilter")}
+              className="rounded-none p-0.5 hover:bg-muted"
+            >
               <X className="size-3.5" />
             </Link>
           </Badge>

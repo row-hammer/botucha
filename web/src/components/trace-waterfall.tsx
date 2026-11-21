@@ -40,7 +40,7 @@ export function TraceWaterfall({
             key={s.id}
             onClick={() => onSelect(s)}
             className={cn(
-              "grid grid-cols-[9rem_1fr_4.5rem] items-center gap-3 rounded px-1 py-0.5 text-left text-xs hover:bg-muted",
+              "grid grid-cols-[9rem_1fr_4.5rem] items-center gap-3 rounded-none px-1 py-0.5 text-left text-xs hover:bg-muted",
               selected === s.id && "bg-muted",
             )}
           >
@@ -48,9 +48,9 @@ export function TraceWaterfall({
               {t(`step.${s.kind}`)}
               {s.name ? <span className="text-muted-foreground"> #{s.name.replace(/\D/g, "")}</span> : null}
             </span>
-            <span className="relative h-3 rounded bg-muted/60">
+            <span className="relative h-3 rounded-none bg-muted/60">
               <span
-                className={cn("absolute top-0 h-3 rounded", barTone[s.status])}
+                className={cn("absolute top-0 h-3 rounded-none", barTone[s.status])}
                 style={{ left: `${(offset / total) * 100}%`, width: `max(2px, ${(s.duration_ms / total) * 100}%)` }}
               />
             </span>

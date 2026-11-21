@@ -93,10 +93,10 @@ export default function PeoplePage() {
             {t("people.legendComention")}
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="size-3 rounded border-2 border-chart-1/60" /> {t("people.member")}
+            <span className="size-3 rounded-none border-2 border-chart-1/60" /> {t("people.member")}
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="size-3 rounded border-2 border-chart-5/60" /> {t("people.friend")}
+            <span className="size-3 rounded-none border-2 border-chart-5/60" /> {t("people.friend")}
           </span>
         </div>
         {graph ? (

@@ -1,5 +1,3 @@
-import { GeistMono } from "geist/font/mono";
-import { GeistSans } from "geist/font/sans";
 import type { Metadata } from "next";
 import { Providers } from "@/components/providers";
 import { Shell } from "@/components/shell";
@@ -9,7 +7,7 @@ export const metadata: Metadata = { title: "Botucha", description: "Local Botuch
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning className={`${GeistSans.variable} ${GeistMono.variable}`}>
+    <html lang="en" suppressHydrationWarning>
       <body className="font-sans antialiased">
         <Providers>
           <Shell>{children}</Shell>

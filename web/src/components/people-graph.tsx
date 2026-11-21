@@ -75,7 +75,7 @@ function PersonNode({ data, selected }: NodeProps) {
         />
       ))}
       <div className="font-medium text-sm">{p.name}</div>
-      <div className="text-[11px] text-muted-foreground">
+      <div className="text-xs text-muted-foreground">
         {p.user_id ? t("people.member") : t("people.friend")} · {p.fact_count} {t("people.facts").toLowerCase()}
       </div>
       {SIDES.map(([side, pos]) => (

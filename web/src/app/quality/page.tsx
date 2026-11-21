@@ -18,7 +18,7 @@ import type { Quality } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 type Range = "24h" | "7d" | "30d";
-const axis = { stroke: "var(--muted-foreground)", fontSize: 11, tickLine: false, axisLine: false };
+const axis = { stroke: "var(--muted-foreground)", fontSize: 12, tickLine: false, axisLine: false };
 const tooltip = {
   cursor: { fill: "var(--muted)" },
   contentStyle: { background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 },
@@ -46,9 +46,9 @@ function ContextMeter({ c }: { c: Quality["context"] }) {
               <span className="text-muted-foreground">{v == null ? "" : pct(v, c.limit)}</span>
             </span>
           </div>
-          <div className="h-2 overflow-hidden rounded-full bg-muted">
+          <div className="h-2 overflow-hidden bg-muted">
             <div
-              className={cn("h-full rounded-full", v != null && v / c.limit > 0.85 ? "bg-bad" : "bg-chart-1")}
+              className={cn("h-full", v != null && v / c.limit > 0.85 ? "bg-bad" : "bg-chart-1")}
               style={{ width: `${v == null ? 0 : Math.min(100, (v / c.limit) * 100)}%` }}
             />
           </div>
@@ -176,7 +176,6 @@ export default function QualityPage() {
                   name={t("quality.replies")}
                   maxBarSize={72}
                   fill="var(--chart-1)"
-                  radius={[4, 4, 0, 0]}
                 />
               </BarChart>
             </ResponsiveContainer>
@@ -194,7 +193,6 @@ export default function QualityPage() {
                   name={t("quality.replies")}
                   maxBarSize={32}
                   fill="var(--chart-2)"
-                  radius={[0, 4, 4, 0]}
                 />
               </BarChart>
             </ResponsiveContainer>
