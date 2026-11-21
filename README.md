@@ -168,7 +168,7 @@ The unit assumes the project lives in `~/Projects/botucha` and uv in mise's defa
 | `/ka_zinai [@vardas arba pravardė]` | what he knows about a member or a friend outside the group, with fact numbers and who they are linked to |
 | `/atsimeni <ko ieškoti>` | find an old conversation, with links to the original messages |
 | `/kaina <tickeris>` | live price, e.g. `/kaina nvda`, `/kaina btc`, `/kaina $ASML` (no model, instant) |
-| `/tyla [min]` | no uninvited replies or reactions for N minutes (default 60) |
+| `/tyla [min]` | no uninvited replies or reactions for N minutes (default 60, at most a week) |
 | reply to his message with `/gerai` (`/geras`) or `/blogai [kodėl]` (`/blogas`) | rate a reply |
 | reply to his message with `/pataisyk <kaip turėjo atsakyti>` | store the full reply he should have given (fine-tuning data) |
 | reactions 👍 ❤️ 🔥 🤣 😁 💯 / 👎 💩 🤮 😴 🥱 on his messages | good / bad rating (only works when he is a group admin) |

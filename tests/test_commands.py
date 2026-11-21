@@ -105,3 +105,11 @@ async def test_unknown_returns_none(ctx):
 
 def test_message_link():
     assert message_link(-1001234567890, 54863) == "https://t.me/c/1234567890/54863"
+
+
+async def test_tyla_is_capped_at_a_week(ctx):
+    from botucha.commands import MAX_TYLA_MIN
+    reply = await run(ctx, "/tyla 5256000", now=1000.0)  # ten years
+    assert ctx.state.quiet_until == 0.0 and str(MAX_TYLA_MIN) in reply
+    await run(ctx, f"/tyla {MAX_TYLA_MIN}", now=1000.0)
+    assert ctx.state.quiet_until == 1000.0 + MAX_TYLA_MIN * 60

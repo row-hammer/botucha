@@ -14,6 +14,7 @@ from .trigger import TriggerState
 
 ADMIN_ONLY = {"pamirsk", "taisyk", "daznis", "isjunk", "ijunk", "statusas", "ivertinimai", "zmogus", "rysys"}
 NOT_ADMIN = "tik bosas gali"
+MAX_TYLA_MIN = 7 * 24 * 60  # a week, as on the dashboard: one member cannot silence him for years
 
 
 @dataclass
@@ -139,6 +140,8 @@ async def handle_command(name: str, args: str, sender_id: int, now: float, ctx: 
         minutes = _int(args) if args else ctx.cfg.trigger.tyla_default_min
         if minutes is None or minutes < 0:
             return "naudok: /tyla [minutes]"
+        if minutes > MAX_TYLA_MIN:
+            return f"daugiausia {MAX_TYLA_MIN} min (savaitė)"
         ctx.state.quiet_until = now + minutes * 60
         store.set_state("quiet_until", str(ctx.state.quiet_until))
         return f"ok, tyliu {minutes} min"
