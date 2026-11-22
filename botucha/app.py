@@ -492,13 +492,29 @@ class Botucha:
         self._persist_pending()
         self._batch_seq = self._error_seq  # errors from here on belong to this batch
         for chat_id, chat_jobs in list(by_chat.items()):
-            try:
-                await self._reply(chat_id, chat_jobs)
-            except Exception as e:  # a failure in one chat must not cost the others their reply
-                log.exception("reply in chat %d failed", chat_id)
-                self.last_error = f"{type(e).__name__}: {e}"
-            self._batch_left = [j for j in self._batch_left if j.chat_id != chat_id]
-            self._persist_pending()
+            for group in self._by_asker(chat_id, chat_jobs):
+                try:
+                    await self._reply(chat_id, group)
+                except Exception as e:  # a failure in one chat or for one asker must not cost the others
+                    log.exception("reply in chat %d failed", chat_id)
+                    self.last_error = f"{type(e).__name__}: {e}"
+                self._batch_left = [j for j in self._batch_left if not any(j is g for g in group)]
+                self._persist_pending()
+
+    def _by_asker(self, chat_id: int, jobs: list[Job]) -> list[list[Job]]:
+        """One reply per person who called him: one person's several messages are one reply, but two
+        people get a reply each, on their own message (a single reply went to the last caller only).
+        Uninvited triggers ride along with the last asker; with no direct call it is one reply as before."""
+        groups: dict[int | None, list[Job]] = {}
+        for j in jobs:
+            if j.direct:
+                m = self.store.get_message(chat_id, j.msg_id)
+                groups.setdefault(m.user_id if m else None, []).append(j)
+        if not groups:
+            return [jobs]
+        out = list(groups.values())
+        out[-1] = out[-1] + [j for j in jobs if not j.direct]
+        return out
 
     async def _reply(self, chat_id: int, jobs: list[Job]) -> None:
         last = self.store.get_message(chat_id, jobs[-1].msg_id)
