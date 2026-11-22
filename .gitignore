@@ -17,4 +17,5 @@ botucha.log
 
 # private: your group's real persona and local backups
 persona.md
+eval/prompts.local.toml
 backups/
