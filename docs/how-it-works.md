@@ -190,7 +190,13 @@ he replies. A reply looks at one image at most: the one the answered message rep
 newest in the burst. It is downloaded into memory only (Telegram's ≤1280 px size, max 5 MB), sent to the model
 with a guard line, and if the model fails on it the second attempt runs on text only. After the reply he
 writes a ≤20-word description and the stored text becomes `[nuotrauka: <description>] <caption>`, so
-history, search and learning see it. Stickers, GIFs and video are ignored.
+history, search and learning see it.
+
+A **GIF** goes the same way through one still frame: the preview Telegram makes for every animation (usually
+about 320 px). It is stored as `[gif] <caption>`, the model is told it sees a single frame and no motion, and
+the description becomes `[gif: <description>] <caption>`. A GIF that has no preview frame is kept as `[gif]` and
+answered from its caption alone. A joke that lives in the movement can still be missed. Stickers and video
+are ignored.
 
 This needs a chat model with vision. A GGUF import has none until you attach the matching projector:
 

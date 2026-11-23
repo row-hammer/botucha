@@ -17,9 +17,9 @@ from pathlib import Path
 from typing import Protocol
 
 from .backup import daily_backup
-from .images import (DESCRIBE_NUM_PREDICT, DESCRIBE_PROMPT, DESCRIBE_TIMEOUT_S, FETCH_TIMEOUT_S, IMAGE_GUARD,
-                     IMAGE_WINDOW_S, MAX_IMAGE_BYTES, caption_of, clean_description, described_text,
-                     description_of, image_text, retag)
+from .images import (DESCRIBE_NUM_PREDICT, DESCRIBE_PROMPT, DESCRIBE_TIMEOUT_S, FETCH_TIMEOUT_S, GIF_DESCRIBE_PROMPT,
+                     GIF_GUARD, IMAGE_GUARD, IMAGE_WINDOW_S, MAX_IMAGE_BYTES, caption_of, clean_description,
+                     described_text, description_of, image_text, is_gif_text, is_media_text, retag)
 from .llm import chat_ex
 from .brain import SERIOUS_NUM_PREDICT, PromptContext, generate_reply_ex, prompt_budget_chars, stable_prompt
 from .commands import CommandContext, handle_command, load_trigger_state, message_link, parse_command
@@ -67,7 +67,8 @@ class Incoming:
     reply_to_bot: bool
     mentions_bot: bool
     edited: bool
-    image_file_id: str | None = None  # a photo: only Telegram's id, downloaded when he replies
+    image_file_id: str | None = None  # a photo, or a GIF's preview frame: only Telegram's id, downloaded when he replies
+    gif: bool = False  # the message is a GIF (image_file_id is its still frame, if Telegram made one)
 
 
 @dataclass
@@ -209,12 +210,12 @@ class Botucha:
                         log.warning("could not leave chat %d: %s", m.chat_id, e)
             return
         command_text = m.text  # a photo's caption can be a command (/rimtai on a chart)
-        if m.image_file_id:
+        if m.image_file_id or m.gif:
             if m.edited:  # caption fixed later: keep a description already written
                 old = self.store.get_message(m.chat_id, m.msg_id)
-                m.text = retag(old.text if old else None, m.text)
+                m.text = retag(old.text if old else None, m.text, gif=m.gif)
             else:
-                m.text = image_text(m.text)
+                m.text = image_text(m.text, gif=m.gif)
         if m.edited:
             self.store.update_message_text(m.chat_id, m.msg_id, m.text)
             return
@@ -369,9 +370,9 @@ class Botucha:
         for rowid, text in self.store.conn.execute(
                 "SELECT rowid, text FROM messages WHERE rowid > ? AND is_bot=0 AND user_id != ? AND chat_id < 0",
                 (self._vocab_rowid, self.bot_user_id)):
-            # caption only: a [nuotrauka: …] description is Botucha's wording, not the group's
+            # caption only: a [nuotrauka: …] or [gif: …] description is Botucha's wording, not the group's
             self._group_words.update(w.lower() for w in re.findall(
-                r"[^\W\d_]+", caption_of(text) if text.startswith("[nuotrauka") else text))
+                r"[^\W\d_]+", caption_of(text) if is_media_text(text) else text))
             self._vocab_rowid = max(self._vocab_rowid, rowid)
         words = set(self._group_words)
         for t in self.memory.all_slang():
@@ -582,7 +583,7 @@ class Botucha:
                 serious=any(j.serious for j in jobs),
                 people=self.memory.people_lines(only=self._people_in_view(history)),
                 chunks=[h.chunk.text for h in hits], facts=[f.text for f in facts], history=history,
-                prices=prices, image=image,
+                prices=prices, image=image, image_gif=image_msg is not None and is_gif_text(image_msg.text),
                 targets=[t for j in jobs if (t := self.store.get_message(chat_id, j.msg_id))])
             await self.outbox.typing(chat_id)
             if not ctx.serious:  # /rimtai has its own system message: warming it would evict the usual one
@@ -684,18 +685,20 @@ class Botucha:
             log.warning("image download failed: %s", e)
             detail["image"] = {"msg_id": msg.msg_id, "error": f"{type(e).__name__}: {e}"}
             return None
-        detail["image"] = {"msg_id": msg.msg_id, "bytes": len(data)}
+        detail["image"] = {"msg_id": msg.msg_id, "bytes": len(data), "gif": is_gif_text(msg.text)}
         return data
 
     async def _describe(self, chat_id: int, msg: StoredMessage, image: bytes) -> None:
-        """After the reply: a short description replaces the bare [nuotrauka] tag, so the image becomes memory."""
+        """After the reply: a short description replaces the bare [nuotrauka] or [gif] tag, so the image becomes
+        memory. A GIF is described from its one frame and says so."""
+        gif = is_gif_text(msg.text)
         run = self.tracer.start("describe", chat_id=chat_id, msg_id=msg.msg_id, user_name=msg.name,
                                 trigger="image") if self.tracer else NULL_RUN
         try:
             with run.step("generation", "attempt 1") as st:
                 res = await asyncio.wait_for(
-                    chat_ex(self.llm, [{"role": "system", "content": IMAGE_GUARD},
-                                       {"role": "user", "content": DESCRIBE_PROMPT}],
+                    chat_ex(self.llm, [{"role": "system", "content": GIF_GUARD if gif else IMAGE_GUARD},
+                                       {"role": "user", "content": GIF_DESCRIBE_PROMPT if gif else DESCRIBE_PROMPT}],
                             num_predict=DESCRIBE_NUM_PREDICT, images=[image]),
                     DESCRIBE_TIMEOUT_S)
                 st.detail.update(res.stats)
@@ -714,7 +717,7 @@ class Botucha:
             run.finish("skipped", error="description rejected")
             return
         current = self.store.get_message(chat_id, msg.msg_id)
-        text = described_text(desc, caption_of(current.text if current else msg.text))
+        text = described_text(desc, caption_of(current.text if current else msg.text), gif=gif)
         self.store.update_message_text(chat_id, msg.msg_id, text)
         run.finish("sent", reply=text)
 

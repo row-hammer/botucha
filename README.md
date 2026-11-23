@@ -28,8 +28,8 @@ knows who is who, and runs entirely on your own PC.
   while the chat is quiet, and members can teach him directly.
 - **People and relations.** Members and friends are known by every name and word form, and linked to the
   facts that mention them and to each other (`Jonas – boss → Petras`).
-- **Sees photos and checks prices.** He looks at a photo he replies to and remembers it; tickers come up with
-  live prices from Yahoo, and he never invents numbers.
+- **Sees photos and GIFs, checks prices.** He looks at a photo or GIF he replies to and remembers it; tickers
+  come up with live prices from Yahoo, and he never invents numbers.
 - **Clean output.** A hunspell check catches invented words, plus filters for repeats, persona leaks and
   stray scripts. Claude can optionally proofread flagged words.
 - **Hardened.** No tools at all, memory passed as data, instruction-like memory refused, per-user rate

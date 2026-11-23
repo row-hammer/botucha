@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from .chunking import render_line
 from .guard import leaks_prompt
 from .trigger import fold
-from .images import IMAGE_GUARD
+from .images import GIF_GUARD, IMAGE_GUARD
 from .llm import LLM, chat_ex
 from .store import StoredMessage
 from .trace import NULL_RUN, TraceRun
@@ -56,7 +56,8 @@ class PromptContext:
     serious: bool = False
     prices: list[str] = field(default_factory=list)
     people: list[str] = field(default_factory=list)
-    image: bytes | None = None  # the one photo he is looking at in this reply
+    image: bytes | None = None  # the one photo he is looking at in this reply (or a GIF's still frame)
+    image_gif: bool = False  # the image is one frame of a GIF: he must not pretend to see the motion
     spelling_notes: list[str] = field(default_factory=list)  # corrections learned from the proofreader
     targets: list[StoredMessage] = field(default_factory=list)  # the messages this reply answers
 
@@ -86,7 +87,7 @@ def _memory_parts(ctx: PromptContext) -> list[tuple[str, str]]:
     """What changes with every reply. It goes into the user message, after the transcript."""
     parts = []
     if ctx.image:
-        parts.append(("image_guard", IMAGE_GUARD))
+        parts.append(("image_guard", GIF_GUARD if ctx.image_gif else IMAGE_GUARD))
     if ctx.people:
         parts.append(("people", "Žmonės ir ryšiai (kas yra kas ir kaip susiję; „A – darbdavys → B“ reiškia, kad A yra B darbdavys):\n" + "\n".join(f"- {p}" for p in ctx.people)))
     if ctx.chunks:

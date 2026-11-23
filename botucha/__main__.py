@@ -92,7 +92,10 @@ def to_incoming(m: Message, me: User, *, edited: bool) -> Incoming:
         reply_to=parent.message_id if parent else None,
         reply_to_bot=bool(parent and parent.from_user and parent.from_user.id == me.id),
         mentions_bot=mentions_bot, edited=edited,
-        image_file_id=photo.file_id if (photo := pick_photo(m.photo)) else None)
+        # a GIF is seen through its preview frame (Telegram makes one for every animation)
+        image_file_id=image.file_id if (image := pick_photo(m.photo) or (
+            m.animation.thumbnail if m.animation else None)) else None,
+        gif=m.animation is not None)
 
 
 class AiogramOutbox:
