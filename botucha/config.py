@@ -77,6 +77,18 @@ class ClaudeCfg:
     timeout_s: float = 15.0
 
 
+def _reaction_examples(raw: dict) -> tuple[tuple[str, tuple[str, ...]], ...]:
+    """[reaction_examples]: "emoji" = ["example message", …]; the key "none" holds plain-talk examples
+    (messages that should get no reaction). Replaces the built-in examples for that emoji."""
+    out = []
+    for emoji, examples in raw.get("reaction_examples", {}).items():
+        if (not isinstance(examples, list) or not examples or len(examples) > 30
+                or not all(isinstance(e, str) and 0 < len(e.strip()) <= 200 for e in examples)):
+            raise ConfigError(f"reaction_examples.{emoji} must be a list of 1-30 example messages")
+        out.append((str(emoji), tuple(e.strip() for e in examples)))
+    return tuple(out)
+
+
 def _claude(raw: dict) -> ClaudeCfg:
     c = raw.get("claude", {})
     until = c.get("until")
@@ -100,6 +112,7 @@ class Config:
     memory: MemoryCfg = MemoryCfg()
     prices: PricesCfg = PricesCfg()
     claude: ClaudeCfg = ClaudeCfg()
+    reaction_examples: tuple[tuple[str, tuple[str, ...]], ...] = ()  # overrides of the built-in examples
 
 
 def load_config(path: Path, env: Mapping[str, str]) -> Config:
@@ -134,6 +147,7 @@ def load_config(path: Path, env: Mapping[str, str]) -> Config:
             prices=PricesCfg(bool(raw.get("prices", {}).get("enabled", True)),
                              tuple((fold(str(k)), str(v)) for k, v in raw.get("prices", {}).get("aliases", {}).items())),
             claude=_claude(raw),
+            reaction_examples=_reaction_examples(raw),
         )
     except KeyError as e:
         raise ConfigError(f"missing config key: {e}") from e

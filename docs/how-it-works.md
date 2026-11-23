@@ -34,7 +34,15 @@ The reference behind the [README](../README.md): every rule, limit and design de
    🥱 and the rest are ignored; the admin's commands are not limited.
 3. **Uninvited**: blocked during `/tyla` and the cooldown. Otherwise a keyword (a word prefix; case and
    Lithuanian letters ignored) replies with `keyword_prob`, else a random 1/`random_n` reply, else a
-   1/`reaction_n` emoji reaction from `reactions`.
+   1/`reaction_n` emoji reaction.
+
+**Which emoji.** Each emoji in `reactions` has a few example messages, and so does plain talk. The message (a
+photo's or GIF's caption) is embedded with `bge-m3`, on the CPU in about 20 ms, and gets the emoji whose
+examples are closest in meaning. When plain talk wins he does not react at all, and the cooldown is not used
+up. On invented messages in the group's style it picked the right emoji for 14 of 17 and left 9 of 10 neutral
+ones alone; a random pick from eight is right 1 time in 8. If the embedding model is down, he falls back to a
+random emoji. Your own examples go in `[reaction_examples]` (see `config.example.toml`); an emoji with no
+examples is never picked.
 
 Commands sent while the bot was offline are stored but never executed or answered.
 
@@ -275,6 +283,7 @@ silently mixes old and new data while still passing an integrity check.
 | `trigger.random_n` | 25 | random reply 1 in n messages; `/daznis`, Controls and Settings all set the live value |
 | `trigger.cooldown_s` | 180 | minimum seconds between uninvited replies |
 | `trigger.reaction_n` / `reactions` | 15 / 🤡 🗿 … | chance and emoji for reactions (Telegram's allowed reactions only) |
+| `[reaction_examples]` | built in | example messages per emoji, and `"none"` for plain talk, that decide which emoji fits |
 | `trigger.burst_quiet_s` / `burst_max_s` | 5 / 20 | burst waiting |
 | `trigger.tyla_default_min` | 60 | default `/tyla` length (at most a week) |
 | `trigger.user_calls_per_min` | 5 | direct calls and commands per person per minute (admin commands exempt) |

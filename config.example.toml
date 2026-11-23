@@ -29,6 +29,12 @@ random_n = 25
 cooldown_s = 180
 reaction_n = 15
 reactions = ["🤡", "🗿", "💊", "🤣", "😈", "🥴", "💩", "🖕"]
+# Which emoji he picks: the one whose example messages are closest in meaning to the message, or none
+# when it is plain talk. Built-in examples cover the emojis above plus 👍 and 🔥. To use your own for an emoji,
+# or for messages that should get no reaction ("none"), add a [reaction_examples] table at the end of the file:
+#   [reaction_examples]
+#   "🤡" = ["pirkau ant pačio viršaus", "vėl apsijuokiau"]
+#   "none" = ["kada susitinkam", "atsiųsk nuorodą"]
 burst_quiet_s = 5
 burst_max_s = 20
 tyla_default_min = 60

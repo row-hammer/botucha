@@ -21,6 +21,7 @@ from .llm import OllamaLLM
 from .memory import Memory
 from .prices import PriceClient
 from .proofread import ClaudeProofreader
+from .reactions import DEFAULT_EXAMPLES, NO_REACTION, ReactionPicker
 from .spell import Speller
 from .store import Store
 from .trace import Tracer
@@ -148,6 +149,9 @@ async def main(config_path: Path) -> None:
     app = Botucha(cfg, store, memory, llm, AiogramOutbox(tg), rng=random.Random(), vision=vision,
                   bot_user_id=me.id, bot_username=me.username or "", prices=PriceClient(), tracer=Tracer(store))
     app.vision_check = llm.has_vision
+    examples = {**DEFAULT_EXAMPLES, **{(NO_REACTION if k.lower() == "none" else k): list(v)
+                                       for k, v in cfg.reaction_examples}}
+    app.reaction_picker = ReactionPicker(memory.embedder, cfg.trigger.reactions, examples)
     app.speller = Speller(Path(__file__).resolve().parent.parent / "data" / "hunspell" / "lt", vocab=app.vocabulary)
     if cfg.claude.enabled:
         app.proofreader = ClaudeProofreader(cfg.claude, store, api_key=env.get("ANTHROPIC_API_KEY", "").strip() or None)

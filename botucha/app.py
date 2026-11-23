@@ -122,6 +122,7 @@ class Botucha:
         self.prices = prices if cfg.prices.enabled else None
         self.speller = None  # set by __main__: Speller(dict, vocab=self.vocabulary)
         self.proofreader = None  # set by __main__ when [claude] is configured: ClaudeProofreader
+        self.reaction_picker = None  # set by __main__: ReactionPicker; None = a random configured emoji
         self.aliases = {**DEFAULT_ALIASES, **dict(cfg.prices.aliases)}
         self._calls: dict[int, deque[float]] = defaultdict(deque)
         self._bg_lock = asyncio.Lock()  # bootstrap and learning never overlap
@@ -286,11 +287,20 @@ class Botucha:
                                         recall=is_recall(m.text),
                                         trigger=reason))
         elif decision is Decision.REACT:
+            emoji = await self._pick_reaction(m.text)
+            if emoji is None:
+                return  # nothing fits: no reaction, and the cooldown is not used up
             mark_unsolicited(self.state, now)
             try:
-                await self.outbox.react(m.chat_id, m.msg_id, self.rng.choice(self.cfg.trigger.reactions))
+                await self.outbox.react(m.chat_id, m.msg_id, emoji)
             except Exception as e:
                 log.warning("reaction failed: %s", e)
+
+    async def _pick_reaction(self, text: str) -> str | None:
+        """The configured emoji that fits the message (a photo or GIF by its caption), or None."""
+        if self.reaction_picker is None:
+            return self.rng.choice(self.cfg.trigger.reactions)
+        return await self.reaction_picker.pick(caption_of(text) if is_media_text(text) else text)
 
     def _is_own(self, chat_id: int, msg_id: int | None) -> bool:
         if msg_id is None:

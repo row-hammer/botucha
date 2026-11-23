@@ -22,8 +22,8 @@ knows who is who, and runs entirely on your own PC.
 
 - **A member, not an assistant.** Short lowercase messages in the group's own slang (Lithuanian in the
   example), dry and sometimes dark humor. The persona is one text file you edit.
-- **Knows when to talk.** Always answers when called; sometimes jumps in on keywords or at random; waits for
-  a burst of messages to end and answers it once; `/tyla` makes him quiet.
+- **Knows when to talk.** Always answers when called; sometimes jumps in on keywords or at random, or reacts
+  with the emoji that fits; waits for a burst of messages to end and answers it once; `/tyla` makes him quiet.
 - **Memory that grows.** Every message is kept and searchable. Facts, slang and member profiles are learned
   while the chat is quiet, and members can teach him directly.
 - **People and relations.** Members and friends are known by every name and word form, and linked to the
