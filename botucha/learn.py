@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 
 import re
 
+from .forwards import FORWARD_LINE, is_forwarded
 from .guard import DEFAULT_BOT_NAME_REGEX, MAX_FACT_CHARS, MAX_SLANG_CHARS, looks_like_instruction, mentions_bot
 from .llm import LLM, chat_ex
 from .memory import Memory
@@ -77,7 +78,8 @@ def _readable(chunk_text: str) -> str:
     Command lines are left out too: /isimink is stored on its own, and learning it again would bring a fact
     back as an automatic one after /pamirsk deleted it."""
     return "\n".join(l for l in chunk_text.splitlines()
-                     if not l.startswith(BOT_LINE_PREFIX) and not _COMMAND_LINE.match(l))
+                     if not l.startswith(BOT_LINE_PREFIX) and not _COMMAND_LINE.match(l)
+                     and not FORWARD_LINE.match(l))  # a forwarded post says nothing about who shared it
 
 
 def _batches(chunks: list[tuple[int, str]], max_chars: int) -> list[list[tuple[int, str]]]:
@@ -244,6 +246,7 @@ async def refresh_profiles(memory: Memory, llm: LLM, store: Store, chat_id: int,
         rows = store.conn.execute(
             "SELECT name, text FROM messages WHERE chat_id=? AND user_id=? AND text != '' AND text NOT LIKE '/%' "
             "ORDER BY rowid DESC LIMIT 50", (chat_id, uid)).fetchall()
+        rows = [r for r in rows if not is_forwarded(r[1])]  # what they shared from elsewhere is not who they are
         if not rows:
             continue
         facts = "\n".join(f"- {f.text}" for f in memory.facts_about(uid)) or "-"

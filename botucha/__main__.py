@@ -76,6 +76,20 @@ def pick_photo(sizes) -> object | None:
     return min(sizes, key=lambda s: s.width * s.height)
 
 
+def forward_source(m: Message) -> str | None:
+    """Who a forwarded message came from: a channel or group title, or a person's name."""
+    o = m.forward_origin
+    if o is None:
+        return None
+    chat = getattr(o, "chat", None) or getattr(o, "sender_chat", None)
+    if chat is not None:
+        return chat.title or chat.username or "?"
+    user = getattr(o, "sender_user", None)
+    if user is not None:
+        return user.full_name
+    return getattr(o, "sender_user_name", None) or "?"
+
+
 def to_incoming(m: Message, me: User, *, edited: bool) -> Incoming:
     text = m.text or m.caption or ""
     user = m.from_user
@@ -96,7 +110,8 @@ def to_incoming(m: Message, me: User, *, edited: bool) -> Incoming:
         # a GIF is seen through its preview frame (Telegram makes one for every animation)
         image_file_id=image.file_id if (image := pick_photo(m.photo) or (
             m.animation.thumbnail if m.animation else None)) else None,
-        gif=m.animation is not None)
+        gif=m.animation is not None,
+        forwarded_from=forward_source(m))
 
 
 class AiogramOutbox:

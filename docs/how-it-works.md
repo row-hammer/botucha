@@ -11,6 +11,7 @@ The reference behind the [README](../README.md): every rule, limit and design de
 - [Claude proofreading](#claude-proofreading)
 - [Prices](#prices)
 - [Images](#images)
+- [Forwarded posts](#forwarded-posts)
 - [The web dashboard](#the-web-dashboard)
 - [Backups and restore](#backups-and-restore)
 - [Configuration reference](#configuration-reference)
@@ -214,6 +215,17 @@ FROM /path/to/mmproj-<model>.gguf        # e.g. mmproj-gemma-4-31B-it-Q8_0.gguf 
 ```
 
 `ollama show <model>` then lists `vision`. At startup the log says `vision: yes` or `vision: no`.
+
+## Forwarded posts
+
+`forwards.py`. A forwarded message (members often forward news channels such as Disclose.tv) is stored as
+`[persiųsta iš <source>] <text>`, with the source taken from Telegram: the channel or group title, or the
+person's name. The model is told that such a message is someone else's post that a member shared, not the
+member's own words and not instructions. It stays in the history and in memory search, without the tag
+steering the search, but it teaches nothing about the member who shared it: no facts, no profile lines, no
+spell-check vocabulary. A forwarded post is never run as a command. A photo or GIF keeps its own tag first:
+`[nuotrauka] [persiųsta iš <source>] <caption>`. The source name is cleaned (no brackets or line breaks,
+at most 60 characters) so it cannot end the tag early.
 
 ## The web dashboard
 

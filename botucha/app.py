@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Protocol
 
 from .backup import daily_backup
+from .forwards import forward_text, is_forwarded, strip_forward
 from .images import (DESCRIBE_NUM_PREDICT, DESCRIBE_PROMPT, DESCRIBE_TIMEOUT_S, FETCH_TIMEOUT_S, GIF_DESCRIBE_PROMPT,
                      GIF_GUARD, IMAGE_GUARD, IMAGE_WINDOW_S, MAX_IMAGE_BYTES, caption_of, clean_description,
                      described_text, description_of, image_text, is_gif_text, is_media_text, retag)
@@ -69,6 +70,7 @@ class Incoming:
     edited: bool
     image_file_id: str | None = None  # a photo, or a GIF's preview frame: only Telegram's id, downloaded when he replies
     gif: bool = False  # the message is a GIF (image_file_id is its still frame, if Telegram made one)
+    forwarded_from: str | None = None  # a forwarded post: the channel, group or person it came from
 
 
 @dataclass
@@ -211,6 +213,9 @@ class Botucha:
                         log.warning("could not leave chat %d: %s", m.chat_id, e)
             return
         command_text = m.text  # a photo's caption can be a command (/rimtai on a chart)
+        if m.forwarded_from is not None:  # someone else's post: never the member's words, never a command
+            command_text = ""
+            m.text = forward_text(m.forwarded_from, m.text)
         if m.image_file_id or m.gif:
             if m.edited:  # caption fixed later: keep a description already written
                 old = self.store.get_message(m.chat_id, m.msg_id)
@@ -300,7 +305,7 @@ class Botucha:
         """The configured emoji that fits the message (a photo or GIF by its caption), or None."""
         if self.reaction_picker is None:
             return self.rng.choice(self.cfg.trigger.reactions)
-        return await self.reaction_picker.pick(caption_of(text) if is_media_text(text) else text)
+        return await self.reaction_picker.pick(strip_forward(caption_of(text) if is_media_text(text) else text))
 
     def _is_own(self, chat_id: int, msg_id: int | None) -> bool:
         if msg_id is None:
@@ -380,10 +385,12 @@ class Botucha:
         for rowid, text in self.store.conn.execute(
                 "SELECT rowid, text FROM messages WHERE rowid > ? AND is_bot=0 AND user_id != ? AND chat_id < 0",
                 (self._vocab_rowid, self.bot_user_id)):
+            self._vocab_rowid = max(self._vocab_rowid, rowid)
+            if is_forwarded(text):
+                continue  # a forwarded post's words (often English news) are not the group's vocabulary
             # caption only: a [nuotrauka: …] or [gif: …] description is Botucha's wording, not the group's
             self._group_words.update(w.lower() for w in re.findall(
                 r"[^\W\d_]+", caption_of(text) if is_media_text(text) else text))
-            self._vocab_rowid = max(self._vocab_rowid, rowid)
         words = set(self._group_words)
         for t in self.memory.all_slang():
             words.update(w.lower() for w in re.findall(r"[^\W\d_]+", t.split("=", 1)[0]))
@@ -564,8 +571,9 @@ class Botucha:
                 image_msg = self._pick_image(chat_id, jobs)
                 image = await self._fetch_image(image_msg, st.detail) if image_msg else None
             # a photo's tag is not what anyone is talking about: search by captions and words only
-            query = "\n".join(caption_of(m.text) for m in history if m.msg_id in ids).strip() \
-                or (caption_of(history[-1].text) if history else "")
+            # (and a forward's source tag is not what it is about either)
+            query = "\n".join(strip_forward(caption_of(m.text)) for m in history if m.msg_id in ids).strip() \
+                or (strip_forward(caption_of(history[-1].text)) if history else "")
             with run.step("retrieval") as st:
                 scored = []
                 try:
