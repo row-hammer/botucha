@@ -297,7 +297,7 @@ silently mixes old and new data while still passing an integrity check.
 | `trigger.reaction_n` / `reactions` | 15 / 🤡 🗿 … | chance and emoji for reactions (Telegram's allowed reactions only) |
 | `[reaction_examples]` | built in | example messages per emoji, and `"none"` for plain talk, that decide which emoji fits |
 | `trigger.burst_quiet_s` / `burst_max_s` | 5 / 20 | burst waiting |
-| `trigger.tyla_default_min` | 60 | default `/tyla` length (at most a week) |
+| `trigger.tyla_default_min` | 60 | default `/tyla` length (at most a week); each member may use `/tyla` once per local day, the admin without limit |
 | `trigger.user_calls_per_min` | 5 | direct calls and commands per person per minute (admin commands exempt) |
 | `paths.*` | | database, persona, style examples, optional export |
 | `memory.locked_members` | [] | user IDs whose memory you keep by hand |
@@ -330,6 +330,39 @@ BOTUCHA_TOKEN=offline uv run python -m botucha.evaluation memory --config config
 ```
 
 The report flags replies that are empty, too long (except `/rimtai`) or written as another member.
+
+## Overnight recheck
+
+Every night (00:30 with the timer below, for 6.5 hours) his real replies are judged again and turned into training
+examples, and then members' messages he never answered (`--unanswered`) are replayed the same way:
+
+1. each moment where he answered in a group (newest first, each once) is replayed as it was just before his
+   reply: later messages, chunks and facts are left out; profiles cannot be rewound, so they are today's;
+2. the current model makes `--n` new replies there, from the same prompt the bot would build;
+3. a judge (another local model) scores them and his real reply against `persona.md`, after all replies are
+   made (in batches of `--batch`, 25 by default, so Ollama swaps models once per batch);
+4. the example is the group's `/pataisyk` correction when there is one; then his real reply if the admin rated it
+   `/gerai` (source `approved`, whatever the judge scored); otherwise the best reply that scores at least
+   `--min-score` with no out-of-character line (a reply rated 👎 never wins, one rated 👍 wins a tie);
+5. a preference pair (for DPO/ORPO) sets the example against the worst reply the judge saw there, when the gap
+   is at least 2 points (1 when the worse one also broke a rule), or with no gap needed for an approved reply,
+   or against his real reply for a correction.
+
+```bash
+uv run python -m botucha.nightly --config config.toml --judge qwen3.6-35b-a3b-q5-64k --hours 6.5 --unanswered --n 3
+uv run python -m botucha.nightly --backfill-pairs   # pairs from examples collected before pairs existed
+ln -sf "$PWD/deploy/botucha-nightly.service" "$PWD/deploy/botucha-nightly.timer" ~/.config/systemd/user/
+systemctl --user daemon-reload && systemctl --user enable --now botucha-nightly.timer
+```
+
+It writes `training/examples-<date>.jsonl` (chat-format `messages` — system, user, assistant — plus every
+candidate with its score and the judge's notes), `training/pairs-<date>.jsonl` (`prompt`, `chosen`,
+`rejected`), `training/report-<date>.md` (counts, the mean score of his
+real replies against the best per moment, and his weakest real replies to look at) and `training/done.txt`.
+They hold real messages, so `training/` is git-ignored. The live database is opened read-only and copied
+into memory. A moment whose replies or verdicts all failed is tried again the next night. Every batch is written when it is judged, and after `--hours` no
+new moment is started. The examples can
+fine-tune a model later, or be read for better `style_examples.txt` lines right away.
 
 ## Models tested
 
@@ -386,6 +419,7 @@ botucha/
   images.py        photo text forms, description cleanup, limits
   prices.py        Yahoo Finance quotes, ticker detection, cache
   backup.py        daily database copy
+  nightly.py       overnight recheck: replies judged again, training examples
   restore.py       put a backup back safely
   trace.py         step traces of replies and learning runs
   webapi/          dashboard API (FastAPI)

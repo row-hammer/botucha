@@ -1,0 +1,12 @@
+[Unit]
+Description=Botucha overnight recheck: judge his real replies and collect training examples
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/Projects/botucha
+# the judge must be another model than the bot's, so it does not grade its own writing
+ExecStart=%h/.local/share/mise/installs/uv/latest/.mise-bins/uv run python -m botucha.nightly --config config.toml --judge qwen3.6-35b-a3b-q5-64k --hours 6.5 --unanswered --n 3
+UMask=0077
+Nice=10
+# starts no new moment after 6.5 h and writes after every batch; the last batch is still judged after that
+TimeoutStartSec=8h
