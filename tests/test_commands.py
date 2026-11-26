@@ -1,8 +1,9 @@
+import time
 from pathlib import Path
 
 import pytest
 
-from botucha.commands import CommandContext, handle_command, load_trigger_state, message_link, parse_command
+from botucha.commands import TYLA_USED, CommandContext, handle_command, load_trigger_state, message_link, parse_command
 from botucha.config import load_config
 from botucha.memory import Memory
 from botucha.store import Store
@@ -87,10 +88,31 @@ async def test_isjunk_persists(ctx):
 
 
 async def test_tyla_default_60(ctx):
-    await run(ctx, "/tyla", now=100.0)
+    await run(ctx, "/tyla", sender=ADMIN, now=100.0)
     assert ctx.state.quiet_until == 100.0 + 3600
-    await run(ctx, "/tyla 5", now=100.0)
+    await run(ctx, "/tyla 5", sender=ADMIN, now=100.0)
     assert ctx.state.quiet_until == 100.0 + 300
+
+
+async def test_tyla_once_a_day_for_members(ctx):
+    noon = time.mktime((2026, 11, 26, 12, 0, 0, 0, 0, -1))
+    assert await run(ctx, "/tyla 10", now=noon) == "ok, tyliu 10 min"
+    assert await run(ctx, "/tyla 10", now=noon + 3600) == TYLA_USED
+    assert ctx.state.quiet_until == noon + 600  # the second one changed nothing
+    assert await run(ctx, "/tyla 10", sender=222, now=noon + 3600) == "ok, tyliu 10 min"  # another member still can
+    tomorrow = time.mktime((2026, 11, 27, 0, 5, 0, 0, 0, -1))
+    assert await run(ctx, "/tyla 10", now=tomorrow) == "ok, tyliu 10 min"
+
+
+async def test_tyla_bad_usage_does_not_spend_the_day(ctx):
+    assert (await run(ctx, "/tyla x")).startswith("naudok")
+    assert (await run(ctx, "/tyla 5256000")).startswith("daugiausia")
+    assert await run(ctx, "/tyla 5") == "ok, tyliu 5 min"
+
+
+async def test_tyla_unlimited_for_admin(ctx):
+    for i in range(5):
+        assert await run(ctx, "/tyla 5", sender=ADMIN, now=100.0 + i) == "ok, tyliu 5 min"
 
 
 async def test_statusas(ctx):

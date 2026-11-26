@@ -1,8 +1,9 @@
-"""Chat commands. Everyone: isimink, slengas, ka_zinai, tyla. Admin: pamirsk, taisyk, zmogus, rysys, daznis, isjunk, ijunk, statusas.
+"""Chat commands. Everyone: isimink, slengas, ka_zinai, tyla (once a day per member, unlimited for the admin). Admin: pamirsk, taisyk, zmogus, rysys, daznis, isjunk, ijunk, statusas.
 rimtai and atsimeni are routed through the reply worker, so handle_command returns None for them."""
 from __future__ import annotations
 
 import re
+import time
 from dataclasses import dataclass
 
 from .config import Config, TriggerCfg
@@ -15,6 +16,12 @@ from .trigger import TriggerState
 ADMIN_ONLY = {"pamirsk", "taisyk", "daznis", "isjunk", "ijunk", "statusas", "ivertinimai", "zmogus", "rysys"}
 NOT_ADMIN = "tik bosas gali"
 MAX_TYLA_MIN = 7 * 24 * 60  # a week, as on the dashboard: one member cannot silence him for years
+TYLA_USED = "šiandien /tyla jau panaudojai, rytoj galėsi vėl"
+
+
+def _day(ts: float) -> str:
+    """Local calendar day: /tyla is once per member per day, the day changing at local midnight."""
+    return time.strftime("%Y-%m-%d", time.localtime(ts))
 
 
 @dataclass
@@ -145,6 +152,11 @@ async def handle_command(name: str, args: str, sender_id: int, now: float, ctx: 
             return "naudok: /tyla [minutes]"
         if minutes > MAX_TYLA_MIN:
             return f"daugiausia {MAX_TYLA_MIN} min (savaitė)"
+        if sender_id != ctx.cfg.telegram.admin_id:  # the admin has no daily limit
+            key = f"tyla_day:{sender_id}"
+            if store.get_state(key) == _day(now):
+                return TYLA_USED
+            store.set_state(key, _day(now))
         ctx.state.quiet_until = now + minutes * 60
         store.set_state("quiet_until", str(ctx.state.quiet_until))
         return f"ok, tyliu {minutes} min"
