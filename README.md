@@ -1,6 +1,6 @@
 <div align="center">
 
-# Botucha
+# botucha
 
 **A Telegram group bot with a personality, a long memory, and nothing in the cloud.**
 
@@ -40,18 +40,68 @@ knows who is who, and runs entirely on your own PC.
 
 ## How it works
 
+Botucha is three programs around one SQLite database: the **bot** (talks in Telegram), the **dashboard**
+(shows and edits everything) and an optional **nightly recheck** (turns his best replies into training data).
+Everything runs on your PC; the only optional cloud call is Claude proofreading a few flagged words.
+
 ```mermaid
 flowchart LR
-    G([Telegram group]) -->|every message| B[Botucha]
-    B -->|stored| M[(SQLite memory)]
-    B -->|reply · react · stay quiet| W[waits for the burst to end]
-    W --> R[memory search<br/>bge-m3 + FTS5]
-    R --> L[local LLM<br/>Ollama on your GPU]
-    L --> F{quality filters}
-    F -->|1–3 short messages| G
-    F -. flagged words only .-> C[Claude proofreading<br/>optional]
-    C -.-> F
+    TG([Telegram group])
+
+    subgraph PC[Your PC]
+        BOT[Bot<br/>botucha.service]
+        DB[(SQLite<br/>messages · memory · traces)]
+        OL[Ollama<br/>chat model + bge-m3]
+        WEB[Dashboard<br/>FastAPI + Next.js]
+        NIGHT[Nightly recheck<br/>00:30 timer]
+        TRAIN[training examples<br/>and preference pairs]
+    end
+
+    CL[Claude<br/>optional proofreading]
+
+    TG <-->|messages · replies · reactions| BOT
+    BOT <--> DB
+    BOT <--> OL
+    BOT -. flagged words only .-> CL
+    WEB <--> DB
+    NIGHT -->|replays real moments| OL
+    NIGHT -->|reads| DB
+    NIGHT --> TRAIN
 ```
+
+**What happens to one message:**
+
+```mermaid
+flowchart TD
+    A[New message in the group] --> S[(stored in SQLite)]
+    A --> T{Should he answer?}
+    T -->|named, mentioned or replied to| D[always]
+    T -->|keyword or 1 in n at random| U[maybe, unless /tyla or cooldown]
+    T -->|otherwise| Q[stays quiet or reacts with an emoji]
+    D --> W[wait until the burst of messages ends]
+    U --> W
+    W --> C[Build context<br/>recent chat · facts · old chats · profiles<br/>people and relations · slang · live prices · photo]
+    C --> P[Prompt = persona + group style + context]
+    P --> G[Local LLM writes a draft]
+    G --> F{Filters<br/>spelling · repeats · length<br/>out of character · other scripts}
+    F -->|passes| OUT[1–3 short messages to the group]
+    F -->|fails once| G
+    F -->|fails twice| FB[fallback line, or silence if nobody asked]
+    OUT --> TR[(trace of every step,<br/>shown on the dashboard)]
+
+    S -. while the chat is quiet .-> L[Learning: new facts, slang, profiles]
+    L -.-> S
+```
+
+## Dashboard
+
+A local web UI at `http://127.0.0.1:8765` (screenshots use invented test data).
+
+| | |
+|---|---|
+| ![Overview](docs/screenshots/overview.png) **Overview**: reply times, ratings, what the filters caught | ![Pipeline](docs/screenshots/pipeline.png) **Pipeline**: how replies flow through attempts and filters |
+| ![Reply trace](docs/screenshots/trace.png) **Thinking**: every step of one reply, with timings | ![Quality](docs/screenshots/quality.png) **Quality**: flagged words, Claude proofreading, context use |
+| ![People](docs/screenshots/people.png) **People**: who is who and how they are related | |
 
 The details, rules and reasons for each step are in **[docs/how-it-works.md](docs/how-it-works.md)**.
 
@@ -92,6 +142,9 @@ systemctl --user enable --now botucha botucha-web
 loginctl enable-linger "$USER"                      # keep running when logged out
 ```
 
+Optional: `deploy/botucha-nightly.timer` rechecks his replies every night and collects training examples
+(see [Overnight recheck](docs/how-it-works.md#overnight-recheck)).
+
 The units assume `~/Projects/botucha` and uv from mise; edit `WorkingDirectory` and `ExecStart` if yours differ.
 The dashboard is at **http://127.0.0.1:8765**.
 
@@ -105,7 +158,7 @@ The dashboard is at **http://127.0.0.1:8765**.
 | `/ka_zinai [name]` | what he knows about someone |
 | `/atsimeni <topic>` | find an old conversation, with links |
 | `/kaina <ticker>` | live price, instantly |
-| `/tyla [min]` | no uninvited replies for a while |
+| `/tyla [min]` | no uninvited replies for a while (once a day per member; unlimited for the admin) |
 | `/gerai` · `/blogai [why]` · `/pataisyk <better reply>` (as a reply to him) | rate or correct a reply |
 
 <details>
