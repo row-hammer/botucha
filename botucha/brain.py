@@ -237,6 +237,110 @@ def is_repeat(line: str, recent_own: list[str] | tuple[str, ...], threshold: flo
     return False
 
 
+SHORT_MAX_CHARS = 200  # an ordinary reply (not /rimtai) is cut back to its last full sentence within this
+TIC_WINDOW = 5  # his last messages a filler opener/closer is counted in
+TIC_MAX = 2  # a filler that already opened (or closed) this many of them is left out of the new reply
+PHRASE_N = 5  # words in a row that may not come back from one of his recent messages
+_FILLER = re.compile(r"(?i)^(tsg|x+d+|ha(ha)+|lol)$")
+_ADDRESS = re.compile(r"^([\w.-]{1,32}),\s*")  # "tadas, " in front of the reply
+_FIRST = re.compile(r"^([^\W\d]+)[,.!]?(?:\s+|$)")
+_LAST = re.compile(r"\s+([^\W\d]+)[.!]*$")
+_SENTENCE_END = re.compile(r"[.!?…]+(?=\s|$)")
+
+
+_NAMED = re.compile(r"^@?([\w.-]{1,32})\s*,\s*")  # "tadas, " or "@mantas, " in front of a reply
+
+
+def strip_address(texts: list[str], member_names: list[str]) -> list[str]:
+    """Leave out the name a direct reply starts with ("tadas, tsg ne varyk" -> "tsg ne varyk"): it is sent as
+    a Telegram reply to that message, so the name in front only repeats who it is for. Any other first word
+    ("zdarova, ...") stays."""
+    if not texts:
+        return texts
+    m = _NAMED.match(texts[0])
+    if not m or _FILLER.match(m.group(1)):
+        return texts
+    who = _squash(m.group(1))
+    if who in ROLE_LABELS or not _writes_as(who, m.group(1), {_squash(n) for n in member_names if n}):
+        return texts
+    rest = texts[0][m.end():].strip()
+    return ([rest] if rest else []) + texts[1:]
+
+
+def _split_opener(line: str) -> tuple[str, str, str]:
+    """(address, first word, rest): "tadas, tsg ne varyk" -> ("tadas, ", "tsg", "ne varyk")."""
+    address = ""
+    m = _ADDRESS.match(line)
+    if m and not _FILLER.match(m.group(1)):
+        address, line = m.group(0), line[m.end():]
+    w = _FIRST.match(line)
+    return (address, w.group(1), line[w.end():]) if w else (address, "", line)
+
+
+def _opener(line: str) -> str:
+    return fold(_split_opener(line)[1])
+
+
+def _closer(line: str) -> str:
+    m = _LAST.search(line)
+    return fold(m.group(1)) if m else ""
+
+
+def strip_tics(texts: list[str], recent_own: list[str] | tuple[str, ...]) -> list[str]:
+    """Leave out a filler word ("tsg", "xddd") that opens or closes the line when it already opened or closed
+    TIC_MAX of his last TIC_WINDOW messages. A filler used now and then stays."""
+    window = list(recent_own)[:TIC_WINDOW]  # newest first
+    out: list[str] = []
+    for t in texts:
+        o = _opener(t)
+        if _FILLER.match(o) and sum(_opener(p) == o for p in window) >= TIC_MAX:
+            address, _, rest = _split_opener(t)
+            t = address + rest if rest else address.rstrip(", ")
+        c = _closer(t)
+        if _FILLER.match(c) and sum(_closer(p) == c for p in window) >= TIC_MAX:
+            t = t[:_LAST.search(t).start()].rstrip(" ,;:-–")
+        t = t.strip()
+        if t:
+            out.append(t)
+    return out
+
+
+def _ngrams(text: str, n: int) -> set[tuple[str, ...]]:
+    w = _norm_words(text)
+    return {tuple(w[i:i + n]) for i in range(len(w) - n + 1)}
+
+
+def repeated_phrase(line: str, recent_own: list[str] | tuple[str, ...], n: int = PHRASE_N) -> str:
+    """The first n-word phrase of line that one of his recent messages already had ("" when none)."""
+    mine = _ngrams(line, n)
+    for prev in recent_own:
+        hit = mine & _ngrams(prev, n)
+        if hit:
+            return " ".join(min(hit))
+    return ""
+
+
+def shorten(texts: list[str], limit: int = SHORT_MAX_CHARS) -> list[str]:
+    """Cut a long reply back to its last full sentence within limit characters. A first sentence that is itself
+    longer stays whole: a reply is never cut mid-sentence."""
+    out: list[str] = []
+    used = 0
+    for t in texts:
+        room = limit - used
+        if len(t) <= room:
+            out.append(t)
+            used += len(t) + 1
+            continue
+        ends = [m.end() for m in _SENTENCE_END.finditer(t)]
+        fits = [e for e in ends if e <= room]
+        if fits:
+            out.append(t[:fits[-1]].strip())
+        elif not out:
+            out.append(t[:ends[0]].strip() if ends else t)
+        break
+    return out
+
+
 @dataclass
 class ReplyResult:
     texts: list[str] | None
@@ -315,6 +419,7 @@ async def generate_reply_ex(llm: LLM, ctx: PromptContext, *, num_predict: int, m
         num_predict = max(num_predict, SERIOUS_NUM_PREDICT)
     max_lines = SERIOUS_MAX_LINES if ctx.serious else MAX_LINES
     fallback: list[str] | None = None
+    echoed_draft: list[str] | None = None  # attempt 1, rejected only for repeating his own phrase
     misspelled: list[tuple[int, int, list[str]]] = []  # (unknown words, attempt, texts)
     images = [ctx.image] if ctx.image else None
     speed: list[float | None] = [None]
@@ -336,6 +441,11 @@ async def generate_reply_ex(llm: LLM, ctx: PromptContext, *, num_predict: int, m
             continue
         t_filter = time.perf_counter()
         texts = clean_reply(res.text, member_names, max_lines)
+        if direct:
+            texts = strip_address(texts, member_names)
+        if not ctx.serious:
+            texts = shorten(texts)
+        texts = strip_tics(texts, recent_own)  # after shortening: a cut reply often ends on its "xddd."
         checks = [_check("empty", bool(texts), "" if texts else "nothing left after cleanup")]
         verdict = None
         if texts and leaks_prompt(" ".join(texts), ctx.persona):
@@ -355,6 +465,17 @@ async def generate_reply_ex(llm: LLM, ctx: PromptContext, *, num_predict: int, m
                 verdict = "rejected"
             else:
                 checks.append(_check("foreign", True))
+                echoed = [(t, p) for t in texts if (p := repeated_phrase(t, recent_own))]
+                if echoed and attempt == 0:
+                    log.info("reply repeats his own phrase %r; regenerating", echoed[0][1])
+                    checks.append(_check("phrase", False, "; ".join(p for _, p in echoed)))
+                    echoed_draft = texts
+                    verdict = "rejected"
+                else:
+                    if echoed:  # the second try repeats too: drop those lines, or keep the draft rather than nothing
+                        texts = [t for t in texts if t not in {e for e, _ in echoed}] or texts
+                    checks.append(_check("phrase", not echoed, "; ".join(p for _, p in echoed)))
+            if verdict is None:
                 unknown = speller.unknown(texts) if speller else []
                 checks.append(_check("spelling", not unknown, ", ".join(unknown)))
                 if unknown:
@@ -378,4 +499,6 @@ async def generate_reply_ex(llm: LLM, ctx: PromptContext, *, num_predict: int, m
             return result(None, quiet=True)
     if misspelled:  # flagged words plus another problem, twice: the cleaner draft rather than nothing
         return result(min(misspelled)[2], fallback=True) if direct else result(None, quiet=True)
+    if echoed_draft:  # attempt 2 failed outright: the draft that only repeated a phrase rather than nothing
+        return result(echoed_draft, fallback=True) if direct else result(None, quiet=True)
     return result(fallback, fallback=True) if fallback else result(None)

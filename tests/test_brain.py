@@ -151,3 +151,93 @@ def test_a_short_alias_does_not_swallow_ordinary_words():
     assert clean_reply("alio: kas cia", names) == ["alio: kas cia"]
     assert clean_reply("Ma: pirk viska\nlabas", names) == ["labas"]          # the alias itself still counts
     assert clean_reply("Marius Petraitis: pirk viska\nlabas", names) == ["labas"]  # and a longer form of the name
+
+
+# --- tics, repeated phrases, length ------------------------------------------------------------------------
+
+from botucha.brain import repeated_phrase, shorten, strip_tics  # noqa: E402
+
+TSG_HISTORY = ["tadas, tsg ne varyk man galvos xddd", "mantas, tsg viskas normalno xddd", "nu jo"]
+
+
+def test_filler_opener_and_closer_left_out_when_overused():
+    out = strip_tics(["tadas, tsg tavo kava baigėsi xddd."], TSG_HISTORY)
+    assert out == ["tadas, tavo kava baigėsi"]
+
+
+def test_filler_kept_when_used_now_and_then():
+    assert strip_tics(["tadas, tsg tavo kava baigėsi xddd"], ["nu jo", "mantas, tsg ok"]) == \
+        ["tadas, tsg tavo kava baigėsi xddd"]
+
+
+def test_filler_without_address_and_real_first_words_kept():
+    hist = ["tsg, ne varyk xddd", "tsg ne varyk xddd"]
+    assert strip_tics(["tsg, ne čia reikalas"], hist) == ["ne čia reikalas"]
+    assert strip_tics(["ne čia reikalas"], ["ne varyk", "ne dabar"]) == ["ne čia reikalas"]  # "ne" is no filler
+
+
+def test_repeated_phrase_found_across_messages():
+    hist = ["varyk jau savo baxurą, kol tave nuovargis visai neišjungė xddd"]
+    assert repeated_phrase("tsg, kol tave nuovargis visai neišjungė, eik miegot", hist) == \
+        "kol tave nuovargis visai neisjunge"
+    assert repeated_phrase("eik geriau miegot, čiuvak", hist) == ""
+
+
+def test_shorten_cuts_at_last_full_sentence():
+    long = "pirmas sakinys čia. " + "antras sakinys yra gerokai ilgesnis " * 6 + "ir baigiasi. trečias."
+    out = shorten([long], 60)
+    assert out == ["pirmas sakinys čia."]
+    assert shorten(["trumpas"], 60) == ["trumpas"]
+    assert shorten(["vienas labai ilgas sakinys be pabaigos " * 5], 60)[0].startswith("vienas")  # never mid-sentence
+
+
+async def test_repeated_phrase_regenerates_once():
+    llm = FakeLLM(["kol tave nuovargis visai neišjungė, čiuvak", "eik miegot, čiuvak"])
+    out = await generate_reply(llm, ctx(), num_predict=150, max_chars=10_000, member_names=[],
+                               recent_own=["varyk jau, kol tave nuovargis visai neišjungė"])
+    assert out == ["eik miegot, čiuvak"] and len(llm.calls) == 2
+
+
+async def test_repeated_phrase_twice_still_answers():
+    rep = "kol tave nuovargis visai neišjungė, čiuvak"
+    llm = FakeLLM([rep, rep])
+    out = await generate_reply(llm, ctx(), num_predict=150, max_chars=10_000, member_names=[],
+                               recent_own=["varyk jau, kol tave nuovargis visai neišjungė"])
+    assert out == [rep]
+
+
+async def test_long_reply_shortened_but_serious_not():
+    long = "pirmas sakinys. " + "x" * 300 + "."
+    assert await generate_reply(FakeLLM([long]), ctx(), num_predict=150, max_chars=10_000,
+                                member_names=[]) == ["pirmas sakinys."]
+    out = await generate_reply(FakeLLM([long]), ctx(serious=True), num_predict=150, max_chars=10_000, member_names=[])
+    assert out == [long]
+
+
+# --- no name in front of a direct reply ---------------------------------------------------------------------
+
+from botucha.brain import strip_address  # noqa: E402
+
+NAMES = ["Tadas", "mantas", "rutele"]
+
+
+def test_direct_reply_loses_the_name_in_front():
+    assert strip_address(["tadas, tsg ne varyk man galvos"], NAMES) == ["tsg ne varyk man galvos"]
+    assert strip_address(["@mantas, imsi trečią", "antra eilutė"], NAMES) == ["imsi trečią", "antra eilutė"]
+    assert strip_address(["Tadas,"], NAMES) == []
+
+
+def test_other_first_words_and_names_later_stay():
+    assert strip_address(["zdarova, ką skubi?"], NAMES) == ["zdarova, ką skubi?"]
+    assert strip_address(["tsg, mantas, ne čia"], NAMES) == ["tsg, mantas, ne čia"]
+    assert strip_address(["ne varyk, tadas"], NAMES) == ["ne varyk, tadas"]
+
+
+async def test_generation_strips_the_name_only_when_called_directly():
+    out = await generate_reply(FakeLLM(["tadas, nu jo"]), ctx(), num_predict=150, max_chars=10_000,
+                               member_names=["Tadas"])
+    assert out == ["nu jo"]
+    from botucha.brain import generate_reply_ex
+    res = await generate_reply_ex(FakeLLM(["tadas, nu jo"]), ctx(), num_predict=150, max_chars=10_000,
+                                  member_names=["Tadas"], direct=False)
+    assert res.texts == ["tadas, nu jo"]
