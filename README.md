@@ -12,7 +12,7 @@ knows who is who, and runs entirely on your own PC.
 ![Ollama](https://img.shields.io/badge/LLM-Ollama%20(local)-000000?logo=ollama&logoColor=white)
 ![SQLite](https://img.shields.io/badge/memory-SQLite-003B57?logo=sqlite&logoColor=white)
 ![Dashboard](https://img.shields.io/badge/dashboard-FastAPI%20%2B%20Next.js-009688?logo=fastapi&logoColor=white)
-![License](https://img.shields.io/badge/license-MIT-blue)
+![License](https://img.shields.io/badge/license-AGPL--3.0-blue)
 
 </div>
 
@@ -208,5 +208,5 @@ cd web && npm run build:static && npm run test:e2e                  # Playwright
 
 <div align="center">
 <sub>Full reference: <a href="docs/how-it-works.md">how it works</a> · config: <a href="config.example.toml">config.example.toml</a> · persona: <a href="persona.example.md">persona.example.md</a><br/>
-MIT licensed, see <a href="LICENSE">LICENSE</a>. The bundled Lithuanian dictionary keeps its own BSD licence.</sub>
+Licensed under the GNU AGPL-3.0, see <a href="LICENSE">LICENSE</a>. The bundled Lithuanian dictionary keeps its own BSD licence.</sub>
 </div>
